@@ -1,0 +1,100 @@
+"""社内申請受付エージェント
+社内には「経費精算申請」「出張申請」「交通費精算申請」「稟議申請」など、様々な申請があります。
+どういう場合にどこにどのような申請を出せばよいか分かりにくい課題があります。 
+
+社員が「出張したい」「備品を購入したい」などの申請内容を入力すると、
+オーケストラレーターエージェントとしてユーザーからの申請内容を受け付け、適切な専門エージェントに振り分けます。
+
+社員が申請ルールや申請方法が分からない方でも正しく申請できることを目的とします。
+"""
+
+from strands import Agent
+from agents.travel_agent import travel_agent, reset_travel_agent
+from agents.receipt_expense_agent import receipt_expense_agent, reset_receipt_expense_agent
+
+# システムプロンプト
+RECEPTION_SYSTEM_PROMPT = """あなたは社内申請受付AIエージェントです。
+オーケストラレーターとしてユーザーからの申請依頼内容に応じて、
+専門エージェントである「交通費精算代行エージェント(travel_agent)」と
+「領収書精算代行エージェント(receipt_expense_agent)」のどちらか適切なエージェントに
+業務を引き継いでください。
+
+処理の流れは以下を参照してください。
+1. ユーザーから申請内容を収集してください。
+2. 申請内容を分析して、処理をするのに最も適切な専門エージェントを特定します
+   -「交通費精算代行エージェント(travel_agent)」：顧客訪問や出張などに発生した交通費だけの精算に関するもの
+   - 「領収書精算代行エージェント(receipt_expense_agent)」:領収書画像を使った経費精算に関するもの
+3. 各専門エージェントの処理が完了したら、再度ユーザーに他に申請したい内容はあるか確認する
+4. すべての申請受付を終えたら、処理を終了してください。
+
+
+主な責任
+ - 申請したい内容を正確に分類すること
+ - 適切な専門エージェントにリクエストを振り分けること
+ - 複数のエージェントが関与する場合に一貫した回答を確保すること
+
+判断プロトコル
+ - 顧客訪問や会議、出張などの移動で発生した交通費用の申請 → 「交通費精算代行エージェント(travel_agent)」
+ - 領収書画像を使った経費の申請、物品の購入費用、資格や研修費用、接待などの経費精算 → 「領収書精算代行エージェント(receipt_expense_agent)」
+
+
+常に丁寧で分かりやすい日本語で対話してください。
+"""
+
+class ReceptionAgent:
+    # 初期化
+    def __init__(self):
+        self.agent = Agent(
+            system_prompt=RECEPTION_SYSTEM_PROMPT,
+            tools=[travel_agent, receipt_expense_agent],
+            agent_id="reception_agent",
+            name="社内申請受付エージェント",
+            description="ユーザーからの申請内容を受け付け、適切な専門エージェントに振り分けます",
+            callback_handler=None  # ストリーミング出力を無効化
+        )
+
+
+    # 実行
+    def run(self):
+        """エージェントを実行"""
+        print("=" * 60)
+        print("こちらは社内申請受付AIエージェントです")
+        print("社内の様々な申請作業をサポートします")
+        print("申請したい内容を教えてください。キーワードでも構いません")
+        print("※終了するには 'exit' または 'quit' と入力ください")
+        print("※最初からやり直すには 'reset' と入力ください")
+        print("=" * 60)
+
+        # 対話ループ
+        while True:
+            try:  
+                # ユーザー入力の受付
+                user_input = input("\n\n入力内容(終了時は'quit'):").strip()
+                
+                # 終了時の処理
+                if user_input.lower() in ["exit", "quit", "終了"]:
+                    print("\nエージェント: ご利用ありがとうございました。")
+                    break
+                
+                # リセット処理
+                if user_input.lower() in ["reset", "リセット", "最初から"]:
+                    reset_travel_agent()
+                    reset_receipt_expense_agent()
+                    print("\nエージェント: 会話履歴をリセットしました。新しい申請を開始できます。")
+                    continue
+                
+                # 空入力のスキップ
+                if not user_input:
+                    continue
+                
+                # エージェントの実行（専門エージェントツールが自動的に呼び出される）
+                response = self.agent(user_input)
+                print(f"\nエージェント: {response}")
+                
+            except KeyboardInterrupt:
+                print("\n\nエージェント: 処理を中断しました。")
+                break
+            except Exception as e:
+                print(f"\nエラーが発生しました: {e}")
+                print("もう一度お試しください。\n")    
+
