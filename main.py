@@ -1,5 +1,7 @@
-"""交通費申請の代行エージェント - メインエントリーポイント"""
+"""社内申請の代行エージェント - メインエントリーポイント"""
 import sys
+from config.config_manager import ConfigManager
+from tools.config_update import set_config_manager
 from agents.reception_agent import ReceptionAgent
 from handlers.error_handler import ErrorHandler
 
@@ -10,6 +12,12 @@ def main():
     
     try:
         error_handler.log_info("システム起動")
+        
+        # ConfigManagerの初期化
+        config_manager = ConfigManager()
+        
+        # ConfigManagerをconfig_updateツールに設定
+        set_config_manager(config_manager)
         
         # エージェントの初期化
         agent = ReceptionAgent()
