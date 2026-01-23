@@ -3,8 +3,7 @@ from strands import Agent, tool
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_tools import image_reader
 from tools.excel_generator import excel_generator
-from tools.config_update import config_updater, set_config_manager
-from storage.config_manager import ConfigManager
+from tools.config_update import config_updater
 
 
 # システムプロンプト
@@ -47,7 +46,6 @@ RECEIPT_EXPENSE_SYSTEM_PROMPT = """あなたは領収書精算申請代行エー
 
 # グローバル変数
 receipt_expense_agent_instance = None
-config_manager_instance = None
 
 
 def _get_receipt_expense_agent() -> Agent:
@@ -57,13 +55,9 @@ def _get_receipt_expense_agent() -> Agent:
     Returns:
         Agent: 領収書精算エージェントのインスタンス
     """
-    global receipt_expense_agent_instance, config_manager_instance
+    global receipt_expense_agent_instance
     
     if receipt_expense_agent_instance is None:
-        # ConfigManagerの初期化
-        config_manager_instance = ConfigManager()
-        set_config_manager(config_manager_instance)
-        
         # エージェントの初期化
         receipt_expense_agent_instance = Agent(
             model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
