@@ -1,4 +1,4 @@
-"""領収書精算代行エージェント"""
+"""経費精算申請エージェント"""
 from strands import Agent, tool
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_tools import image_reader
@@ -7,7 +7,7 @@ from tools.config_update import config_updater
 
 
 # システムプロンプト
-RECEIPT_EXPENSE_SYSTEM_PROMPT = """あなたは領収書精算申請代行エージェントです。
+RECEIPT_EXPENSE_SYSTEM_PROMPT = """あなたは経費精算申請エージェントです。
 
 ## 役割
 
@@ -50,10 +50,10 @@ receipt_expense_agent_instance = None
 
 def _get_receipt_expense_agent() -> Agent:
     """
-    領収書精算エージェントのインスタンスを取得（シングルトンパターン）
+    経費精算申請エージェントのインスタンスを取得（シングルトンパターン）
     
     Returns:
-        Agent: 領収書精算エージェントのインスタンス
+        Agent: 経費精算申請エージェントのインスタンス
     """
     global receipt_expense_agent_instance
     
@@ -69,7 +69,7 @@ def _get_receipt_expense_agent() -> Agent:
             ],
             conversation_manager=SlidingWindowConversationManager(),
             agent_id="receipt_expense_agent",
-            name="領収書精算代行エージェント",
+            name="経費精算申請エージェント",
             description="領収書画像から情報を抽出し、Excel形式の経費精算申請書を自動生成します",
             callback_handler=None  # ストリーミング出力を無効化
         )
@@ -80,7 +80,7 @@ def _get_receipt_expense_agent() -> Agent:
 @tool
 def receipt_expense_agent(query: str) -> str:
     """
-    領収書精算代行ツール
+    経費精算申請ツール
     
     領収書画像から情報を抽出し、Excel形式の経費精算申請書を自動生成します。
     会話履歴を保持するため、複数回の呼び出しで段階的に情報を収集できます。
@@ -106,7 +106,7 @@ def receipt_expense_agent(query: str) -> str:
 
 def reset_receipt_expense_agent():
     """
-    領収書精算エージェントの状態をリセット
+    経費精算申請エージェントの状態をリセット
     
     新しい申請を開始する際に呼び出すことで、会話履歴をクリアする。
     """

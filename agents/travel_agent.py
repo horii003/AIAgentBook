@@ -1,4 +1,4 @@
-"""交通費申請代行エージェント"""
+"""交通費精算申請エージェント"""
 from strands import Agent, tool
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from tools.fare_tools import load_fare_data, calculate_fare
@@ -7,7 +7,7 @@ from tools.report_tools import generate_report
 
 
 # システムプロンプト
-TRAVEL_SYSTEM_PROMPT = """あなたは交通費申請を支援するAIエージェントです。
+TRAVEL_SYSTEM_PROMPT = """あなたは交通費精算申請エージェントです。
 ユーザーから移動情報を一区間ずつ収集し、交通費を計算して申請書を作成します。
 
 処理フロー:
@@ -45,10 +45,10 @@ travel_agent_instance = None
 #エージェントの初期化
 def _get_travel_agent() -> Agent:
     """
-    交通費申請エージェントのインスタンスを取得（シングルトンパターン）
+    交通費精算申請エージェントのインスタンスを取得（シングルトンパターン）
     
     Returns:
-        Agent: 交通費申請エージェントのインスタンス
+        Agent: 交通費精算申請エージェントのインスタンス
     """
 
     global travel_agent_instance
@@ -70,7 +70,7 @@ def _get_travel_agent() -> Agent:
             ],
             conversation_manager=SlidingWindowConversationManager(),
             agent_id="travel_agent",
-            name="交通費申請代行エージェント",
+            name="交通費精算申請エージェント",
             description="ユーザーから移動情報を収集し、交通費を計算して申請書を作成します",
             callback_handler=None  # ストリーミング出力を無効化
         )
@@ -81,7 +81,7 @@ def _get_travel_agent() -> Agent:
 @tool
 def travel_agent(query: str) -> str:
     """
-    交通費申請代行ツール
+    交通費精算申請ツール
     
     ユーザーから移動情報を一区間ずつ収集し、交通費を計算して申請書を作成します。
     会話履歴を保持して、複数回の呼び出しでも段階的に情報を収集します。
@@ -108,7 +108,7 @@ def travel_agent(query: str) -> str:
 #エージェントのリセット
 def reset_travel_agent():
     """
-    交通費代行申請エージェントの状態をリセット
+    交通費精算申請エージェントの状態をリセット
     
     ユーザーから会話をリセットしたい要望があった場合は、会話履歴をクリアする。
     """
