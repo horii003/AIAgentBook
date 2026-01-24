@@ -1,4 +1,4 @@
-"""社内申請の代行エージェント - メインエントリーポイント"""
+"""申請受付窓口エージェント - メインエントリーポイント"""
 import sys
 from config.config_manager import ConfigManager
 from tools.config_update import set_config_manager
@@ -27,16 +27,6 @@ def main():
 
         # エージェントの終了
         error_handler.log_info("システム正常終了")
-
-    #必要か確認    
-    except FileNotFoundError as e:
-        # 運賃データファイルが見つからない
-        print("\n" + "=" * 60)
-        print("エラー")
-        print("=" * 60)
-        print(error_handler.handle_fare_data_error(e))
-        print("=" * 60)
-        sys.exit(1)
     
     except Exception as e:
         # その他のエラー
