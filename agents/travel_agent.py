@@ -1,6 +1,6 @@
 """交通費精算申請エージェント"""
 from strands import Agent, tool
-from strands.types.retry import ModelRetryStrategy
+from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from tools.fare_tools import load_fare_data, calculate_fare
 from tools.validation_tools import validate_input

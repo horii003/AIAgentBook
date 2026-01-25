@@ -9,7 +9,7 @@
 """
 
 from strands import Agent
-from strands.types.retry import ModelRetryStrategy
+from strands import ModelRetryStrategy
 from agents.travel_agent import travel_agent, reset_travel_agent
 from agents.receipt_expense_agent import receipt_expense_agent, reset_receipt_expense_agent
 
