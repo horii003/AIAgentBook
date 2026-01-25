@@ -1,15 +1,21 @@
 """シンプルなログ機能付きステアリングハンドラー"""
-import logging
-from strands.experimental.steering import LLMSteeringHandler
-from config.config_manager import ConfigManager
 
-config_manager = ConfigManager.get_instance()
+import sys
+import os
+import logging
+from dotenv import load_dotenv
+from strands.experimental.steering import LLMSteeringHandler
+
+# .envファイルを読み込み
+load_dotenv()
+
+log_level = os.environ['LOG_LEVEL'] if os.environ['LOG_LEVEL'] is None else "INFO"
 
 # ステアリングハンドラー用のロガー設定
 def setup_steering_logger():
     """ステアリングハンドラー用のシンプルなロガーをセットアップ"""
     logger = logging.getLogger("SteeringHandler")
-    logger.setLevel(config_manager.log_level)
+    logger.setLevel(log_level)
     
     # 既存のハンドラーをクリア
     if logger.handlers:
