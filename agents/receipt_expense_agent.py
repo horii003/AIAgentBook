@@ -1,6 +1,6 @@
 """経費精算申請エージェント"""
 from strands import Agent, tool, ToolContext
-from strands.types.retry import ModelRetryStrategy
+from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_tools import image_reader
 from tools.excel_generator import excel_generator
