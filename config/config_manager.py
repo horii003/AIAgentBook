@@ -16,6 +16,7 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+config_manager_instance = None
 
 class ConfigManager:
     """
@@ -36,6 +37,7 @@ class ConfigManager:
     def __init__(self):
         """設定の初期化"""
         # 環境変数から設定を読み込み
+        self.log_level = os.getenv("LOG_LEVEL", "ERROR")
         self.applicant_name = os.getenv("APPLICANT_NAME", "未設定")
         self.output_directory = os.getenv("OUTPUT_DIRECTORY", "./output")
         self.bedrock_token = os.getenv("AWS_BEARER_TOKEN_BEDROCK")
@@ -46,8 +48,17 @@ class ConfigManager:
         # 出力ディレクトリの作成
         Path(self.output_directory).mkdir(parents=True, exist_ok=True)
         
-        logger.info(f"設定を初期化しました: 申請者名={self.applicant_name}, 出力先={self.output_directory}")
+        logger.info(f"設定を初期化しました: LOG_LEVEL={self.log_level}, 申請者名={self.applicant_name}, 出力先={self.output_directory}")
     
+    @classmethod
+    def get_instance(cls):
+        global config_manager_instance
+        
+        if config_manager_instance is None:
+            config_manager_instance = ConfigManager()
+        
+        return config_manager_instance
+
     def get_applicant_name(self) -> str:
         """
         申請者名を取得

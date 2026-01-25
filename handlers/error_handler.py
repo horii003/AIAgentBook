@@ -7,7 +7,7 @@ from typing import Optional
 class ErrorHandler:
     """エラーハンドラー"""
     
-    def __init__(self, log_file: str = "logs/error.log"):
+    def __init__(self, log_file: str = "logs/error.log", log_level : str = "ERROR"):
         """
         エラーハンドラーの初期化
         
@@ -15,6 +15,7 @@ class ErrorHandler:
             log_file: ログファイルのパス
         """
         self.log_file = log_file
+        self.log_level = log_level
         self._setup_logger()
     
     def _setup_logger(self):
@@ -27,21 +28,25 @@ class ErrorHandler:
             os.makedirs(log_dir)
         
         # ロガーの設定
-        self.logger = logging.getLogger("TravelExpenseAgent")
-        self.logger.setLevel(logging.INFO)
-        
+        # self.logger = logging.getLogger("TravelExpenseAgent")
+        self.logger = logging.getLogger()
+        self.logger.setLevel(self.log_level)
+
+        # コンソール出力
+        console_handler = logging.StreamHandler()
+
         # ファイルハンドラーの追加
         file_handler = logging.FileHandler(self.log_file, encoding="utf-8")
-        file_handler.setLevel(logging.INFO)
+        # file_handler.setLevel(logging.INFO)
         
         # フォーマッターの設定
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
+        formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(name)s - %(message)s')
+        console_handler.setFormatter(formatter)
         file_handler.setFormatter(formatter)
         
         # ハンドラーの追加
         if not self.logger.handlers:
+            self.logger.addHandler(console_handler)
             self.logger.addHandler(file_handler)
     
     def handle_bedrock_error(self, error: Exception, context: Optional[dict] = None) -> str:
