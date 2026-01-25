@@ -24,9 +24,8 @@ def receipt_excel_generator(
     amount: float,
     date: str,
     items: List[str],
-    expense_category: str,
-    output_directory: str
-) -> str:
+    expense_category: str
+) -> dict:
     """
     Excel形式の経費精算申請書を生成する。
 
@@ -53,10 +52,13 @@ def receipt_excel_generator(
         date: 日付（YYYY-MM-DD形式）
         items: 品目のリスト
         expense_category: 経費区分
-        output_directory: 出力ディレクトリのパス
         
     Returns:
-        str: 生成されたExcelファイルのパス、またはエラーメッセージ
+        dict: {
+            "success": bool,         # 成功フラグ
+            "file_path": str,        # 保存されたファイルのパス
+            "message": str           # 結果メッセージ
+        }
         
     Raises:
         ValueError: 金額が30,000円を超える場合
@@ -65,18 +67,17 @@ def receipt_excel_generator(
     approved, message = ApprovalRuleEngine.check_amount(amount)
     if not approved:
         raise ValueError(message)
-
-
-    #出力ディレクトリの設定
-    output_path = Path("output")
-    output_path.mkdir(parents=True, exist_ok=True)
-    
-    #ファイルパスの生成
-    file_path = output_path / filename
     
     # ファイル名の生成（タイムスタンプ付き）
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"経費精算申請書_{timestamp}.xlsx"
+    
+    # 出力ディレクトリの設定
+    output_path = Path("output")
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # ファイルパスの生成
+    file_path = output_path / filename
     
 
     # Excelワークブックの作成
@@ -164,7 +165,11 @@ def receipt_excel_generator(
     # ファイルの保存
     wb.save(file_path)
     
-    return str(file_path)
+    return {
+        "success": True,
+        "file_path": str(file_path),
+        "message": f"申請書を正常に作成しました: {file_path}"
+    }
 
 
 # 交通費精算申請エージェント用の申請書作成ツール
