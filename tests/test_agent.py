@@ -105,7 +105,7 @@ class TestReceiptExpenseAgent:
         agent = _get_receipt_expense_agent()
         
         assert agent is not None
-        assert len(agent.tools) == 3  # image_reader, excel_generator, config_updater
+        assert len(agent.tools) == 2  # image_reader, excel_generator
     
     def test_receipt_expense_agent_has_correct_tools(self):
         """receipt_expense_agentが正しいツールを持っているかテスト"""
@@ -116,8 +116,7 @@ class TestReceiptExpenseAgent:
         
         expected_tools = [
             "image_reader",
-            "excel_generator",
-            "config_updater"
+            "excel_generator"
         ]
         
         for expected_tool in expected_tools:

@@ -1,9 +1,11 @@
 """申請受付窓口エージェント - メインエントリーポイント"""
 import sys
-from config.config_manager import ConfigManager
-from tools.config_update import set_config_manager
+from dotenv import load_dotenv
 from agents.reception_agent import ReceptionAgent
 from handlers.error_handler import ErrorHandler
+
+# .envファイルを読み込み
+load_dotenv()
 
 
 def main():
@@ -12,12 +14,6 @@ def main():
     
     try:
         error_handler.log_info("システム起動")
-        
-        # ConfigManagerの初期化
-        config_manager = ConfigManager()
-        
-        # ConfigManagerをconfig_updateツールに設定
-        set_config_manager(config_manager)
         
         # エージェントの初期化
         agent = ReceptionAgent()
