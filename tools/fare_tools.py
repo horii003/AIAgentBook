@@ -42,11 +42,11 @@ def load_fare_data() -> dict:
         raise FileNotFoundError(f"固定運賃データファイルが見つかりません: {fixed_fares_path}")
     
     try:
-        # 電車運賃データの読み込み
+        # 電車運賃データの読み込みと変換
         with open(train_fares_path, "r", encoding="utf-8") as f:
             train_data = json.load(f)
         
-        # 固定運賃データの読み込み
+        # 固定運賃データの読み込みと変換
         with open(fixed_fares_path, "r", encoding="utf-8") as f:
             fixed_data = json.load(f)
         
