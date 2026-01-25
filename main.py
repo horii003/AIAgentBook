@@ -1,5 +1,7 @@
 """申請受付窓口エージェント - メインエントリーポイント"""
 import sys
+import os
+import logging
 from dotenv import load_dotenv
 from agents.reception_agent import ReceptionAgent
 from handlers.error_handler import ErrorHandler
@@ -7,14 +9,22 @@ from handlers.error_handler import ErrorHandler
 # .envファイルを読み込み
 load_dotenv()
 
+# logger
+log_level = os.environ['LOG_LEVEL'] if os.environ['LOG_LEVEL'] is None else "INFO"
+logging.getLogger("strands").setLevel(log_level)
+logging.basicConfig(
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+    level=log_level,
+    handlers=[logging.StreamHandler()]
+)
 
 def main():
     # エラーハンドラーの初期化
-    error_handler = ErrorHandler()
+    error_handler = ErrorHandler(log_level=log_level)
     
     try:
         error_handler.log_info("システム起動")
-        
+
         # エージェントの初期化
         agent = ReceptionAgent()
         

@@ -5,6 +5,7 @@ from strands.agent.conversation_manager import SlidingWindowConversationManager
 from tools.fare_tools import load_fare_data, calculate_fare
 from tools.validation_tools import validate_input
 from tools.report_tools import generate_report
+from handlers.steering_handler import LoggedSteeringHandler, steering_logger
 
 
 # システムプロンプト
@@ -28,6 +29,13 @@ TRAVEL_SYSTEM_PROMPT = """あなたは交通費精算申請エージェントで
 - すべての区間の入力が完了したら、最終確認を行ってください
 - 申請書の形式は必ずユーザーに選択してもらってください(PDFまたはJSON)
 
+ルール検証との連携:
+- 申請内容はルール検証エージェントによって自動的にチェックされます
+- 検証結果に基づいて適切に対応してください：
+  * "proceed": そのまま処理を続行
+  * "guide": 提案された修正をユーザーに確認
+  * "interrupt": 処理を一時停止し、ユーザーに詳細確認を求める
+
 generate_reportツールの使用方法:
 - routesパラメータ: 収集した全経路データのリスト（必須）
 - formatパラメータ: "pdf" または "json"（必須）
@@ -39,8 +47,42 @@ generate_reportツールの使用方法:
 常に丁寧で分かりやすい日本語で対話してください。
 """
 
+# 検証ルール（ログ機能付き）
+rule_steering = LoggedSteeringHandler(
+    system_prompt="""あなたは交通費精算のルール検証エージェントです。
+メインエージェントの申請内容を検証し、適切なガイダンスを提供してください。
+
+あなたの役割:
+メインエージェントが交通費申請を処理する際に、コンテキストに応じたガイダンスを提供します。
+
+申請ルール:
+１．日付：過去3か月を超える場合は修正提案をし、直らなければユーザーの確認を求める
+２．5000円を超える申請は事前に上長承認しているかをユーザーに確認する
+３．目的が業務関連か確認し、業務目的と判断できない場合は、ユーザーに詳細な目的確認を求める
+
+判断基準と応答:
+- ルール準拠 → "proceed": 処理を続行してよい
+- 軽微な違反 → "guide": メインエージェントに修正提案を促す具体的なガイダンスを提供
+- 重大な違反 → "interrupt": 人間の確認が必要（注意：interruptは実際にエージェントを停止させます）
+
+重要: interruptを使用する場合の条件
+- 5000円を超える申請で上長承認の確認が取れていない場合
+- 業務目的が不明確で高額（5000円以上）の申請の場合
+- 過去3か月を超える日付で業務上の正当な理由が不明な場合
+
+応答形式:
+判断結果と理由を明確に示してください。
+例：
+- "proceed: すべてのルールに準拠しています"
+- "guide: 日付が3か月以上前です。ユーザーに確認を求めてください"
+- "interrupt: 業務目的が不明確で、高額（10000円）です。上長の承認確認が必要です"
+"""
+)
+
+
 # グローバル変数
 travel_agent_instance = None
+travel_agent_interrupt_state = None  # interrupt状態を保持
 
 
 #エージェントの初期化
@@ -67,9 +109,10 @@ def _get_travel_agent() -> Agent:
             system_prompt=TRAVEL_SYSTEM_PROMPT,
             tools=[
                 calculate_fare,
-                validate_input,
+                # validate_input,
                 generate_report
             ],
+            hooks=[rule_steering],
             conversation_manager=SlidingWindowConversationManager(),
             agent_id="travel_agent",
             name="交通費精算申請エージェント",
@@ -99,16 +142,64 @@ def travel_agent(query: str) -> str:
     Returns:
         str: エージェントからの応答
     """
+    global travel_agent_interrupt_state
+    
     try:
+        steering_logger.info(f"Travel agent called: {query[:100]}...")
+        
         # エージェントインスタンスを取得（初回は初期化、2回目以降は既存インスタンスを使用する）
         agent = _get_travel_agent()
         
-        # エージェント実行
-        response = agent(query)
+        # interrupt再開処理
+        if travel_agent_interrupt_state is not None:
+            steering_logger.info("Resuming from interrupt...")
+            
+            # ユーザーの応答を解析
+            user_response = query.lower().strip()
+            approval = "y" if user_response in ["承認", "y", "yes", "はい", "ok"] else "n"
+            
+            # interruptResponseを作成
+            interrupt_responses = []
+            for interrupt in travel_agent_interrupt_state.interrupts:
+                interrupt_responses.append({
+                    "interruptResponse": {
+                        "interruptId": interrupt.id,
+                        "response": approval
+                    }
+                })
+            
+            # interrupt状態をクリア
+            travel_agent_interrupt_state = None
+            
+            # エージェントを再開
+            response = agent(interrupt_responses)
+        else:
+            # 通常の実行
+            response = agent(query)
+        
+        # interrupt処理
+        if response.stop_reason == "interrupt":
+            steering_logger.warning(f"Agent interrupted: {len(response.interrupts)} interrupt(s)")
+            
+            # interrupt状態を保存
+            travel_agent_interrupt_state = response
+            
+            # interrupt情報を整形して返す
+            interrupt_messages = []
+            for interrupt in response.interrupts:
+                reason = interrupt.reason if hasattr(interrupt, 'reason') else "確認が必要です"
+                interrupt_messages.append(f"[重要な確認] {reason}")
+            
+            return "\n".join(interrupt_messages) + "\n\n上記の確認が必要です。承認する場合は「承認」または「y」、拒否する場合は「拒否」または「n」と入力してください。"
+        
+        steering_logger.info("Travel agent response generated")
         
         return str(response)
     
     except Exception as e:
+        steering_logger.error(f"Travel agent error: {str(e)}")
+        # エラー時はinterrupt状態をクリア
+        travel_agent_interrupt_state = None
         return f"エラーが発生しました: {e}"
 
 
@@ -119,5 +210,6 @@ def reset_travel_agent():
     
     ユーザーから会話をリセットしたい要望があった場合は、会話履歴をクリアする。
     """
-    global travel_agent_instance
+    global travel_agent_instance, travel_agent_interrupt_state
     travel_agent_instance = None
+    travel_agent_interrupt_state = None
