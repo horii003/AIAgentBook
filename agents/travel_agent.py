@@ -63,6 +63,7 @@ def _get_travel_agent() -> Agent:
         
         # エージェントの初期化
         travel_agent_instance = Agent(
+            model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
             system_prompt=TRAVEL_SYSTEM_PROMPT,
             tools=[
                 calculate_fare,
