@@ -1,33 +1,30 @@
 """申請受付窓口エージェント - メインエントリーポイント"""
 import sys
+import os
 import logging
-from config.config_manager import ConfigManager
-from tools.config_update import set_config_manager
+from dotenv import load_dotenv
 from agents.reception_agent import ReceptionAgent
 from handlers.error_handler import ErrorHandler
 
-# ConfigManagerの初期化
-# config_manager = ConfigManager()
-config_manager = ConfigManager.get_instance()
-
-# ConfigManagerをconfig_updateツールに設定
-set_config_manager(config_manager)
+# .envファイルを読み込み
+load_dotenv()
 
 # logger
-logging.getLogger("strands").setLevel(config_manager.log_level)
+log_level = os.environ['LOG_LEVEL'] if os.environ['LOG_LEVEL'] is None else "INFO"
+logging.getLogger("strands").setLevel(log_level)
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-    level=logging.INFO,
+    level=log_level,
     handlers=[logging.StreamHandler()]
 )
 
 def main():
     # エラーハンドラーの初期化
-    error_handler = ErrorHandler(log_level=config_manager.log_level)
+    error_handler = ErrorHandler(log_level=log_level)
     
     try:
         error_handler.log_info("システム起動")
-                
+
         # エージェントの初期化
         agent = ReceptionAgent()
         

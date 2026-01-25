@@ -1,5 +1,6 @@
 """交通費精算申請エージェント"""
 from strands import Agent, tool
+from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from tools.fare_tools import load_fare_data, calculate_fare
 from tools.validation_tools import validate_input
@@ -104,6 +105,7 @@ def _get_travel_agent() -> Agent:
         
         # エージェントの初期化
         travel_agent_instance = Agent(
+            model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
             system_prompt=TRAVEL_SYSTEM_PROMPT,
             tools=[
                 calculate_fare,
@@ -115,7 +117,12 @@ def _get_travel_agent() -> Agent:
             agent_id="travel_agent",
             name="交通費精算申請エージェント",
             description="ユーザーから移動情報を収集し、交通費を計算して申請書を作成します",
-            callback_handler=None  # ストリーミング出力を無効化
+            callback_handler=None,  # ストリーミング出力を無効化
+            retry_strategy=ModelRetryStrategy(
+                max_attempts=6,
+                initial_delay=4,
+                max_delay=240
+            )
         )
     
     return travel_agent_instance

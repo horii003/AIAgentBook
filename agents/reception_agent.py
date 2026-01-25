@@ -9,6 +9,7 @@
 """
 
 from strands import Agent
+from strands import ModelRetryStrategy
 from agents.travel_agent import travel_agent, reset_travel_agent
 from agents.receipt_expense_agent import receipt_expense_agent, reset_receipt_expense_agent
 
@@ -45,12 +46,18 @@ class ReceptionAgent:
     # 初期化
     def __init__(self):
         self.agent = Agent(
+            model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
             system_prompt=RECEPTION_SYSTEM_PROMPT,
             tools=[travel_agent, receipt_expense_agent],
             agent_id="reception_agent",
             name="申請受付窓口エージェント",
             description="ユーザーからの申請内容を受け付け、適切な専門エージェントに振り分けます",
-            callback_handler=None  # ストリーミング出力を無効化
+            callback_handler=None,  # ストリーミング出力を無効化
+            retry_strategy=ModelRetryStrategy(
+                max_attempts=6,
+                initial_delay=4,
+                max_delay=240
+            )
         )
 
 
