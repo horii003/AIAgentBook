@@ -107,7 +107,12 @@ def _get_travel_agent() -> Agent:
             agent_id="travel_agent",
             name="交通費精算申請エージェント",
             description="ユーザーから移動情報を収集し、交通費を計算して申請書を作成します",
-            callback_handler=None  # ストリーミング出力を無効化
+            callback_handler=None,  # ストリーミング出力を無効化
+            retry_strategy=ModelRetryStrategy(
+                max_attempts=6,
+                initial_delay=4,
+                max_delay=240
+            )
         )
     
     return travel_agent_instance
@@ -198,3 +203,4 @@ def reset_travel_agent():
     global travel_agent_instance, travel_agent_interrupt_state
     travel_agent_instance = None
     travel_agent_interrupt_state = None
+
