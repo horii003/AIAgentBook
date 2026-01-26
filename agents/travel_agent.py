@@ -3,7 +3,6 @@ from strands import Agent, tool
 from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from tools.fare_tools import load_fare_data, calculate_fare
-from tools.validation_tools import validate_input
 from tools.excel_generator import travel_excel_generator
 from handlers.steering_handler import LoggedSteeringHandler, steering_logger
 
@@ -99,7 +98,6 @@ def _get_travel_agent() -> Agent:
             system_prompt=TRAVEL_SYSTEM_PROMPT,
             tools=[
                 calculate_fare,
-                validate_input,
                 travel_excel_generator
             ],
             hooks=[rule_steering],
