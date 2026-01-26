@@ -1,5 +1,5 @@
 """交通費精算申請エージェント"""
-from strands import Agent, tool
+from strands import Agent, tool, ToolContext
 from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from tools.fare_tools import load_fare_data, calculate_fare
@@ -28,7 +28,7 @@ TRAVEL_SYSTEM_PROMPT = """あなたは交通費精算申請エージェントで
 
 travel_excel_generatorツールの使用方法:
 - routesパラメータ: 収集した全経路データのリスト（必須）
-- user_idパラメータ: "0001"（デフォルト値を使用）
+- 申請者名は自動的に取得されます（引数として渡す必要はありません）
 - ツールは1回だけ呼び出してください
 - エラーが発生した場合は、ツールの戻り値のmessageフィールドを確認してください
 - successフィールドがtrueの場合のみ成功です
@@ -116,8 +116,8 @@ def _get_travel_agent() -> Agent:
     return travel_agent_instance
 
 #Agent as Tools
-@tool
-def travel_agent(query: str) -> str:
+@tool(context=True)
+def travel_agent(query: str, tool_context: ToolContext) -> str:
     """
     交通費精算申請ツール
     
@@ -137,6 +137,12 @@ def travel_agent(query: str) -> str:
         
         # エージェントインスタンスを取得（初回は初期化、2回目以降は既存インスタンスを使用する）
         agent = _get_travel_agent()
+        
+        # invocation_stateから申請者名を取得
+        applicant_name = None
+        if tool_context and tool_context.invocation_state:
+            applicant_name = tool_context.invocation_state.get("applicant_name")
+        
         
         # interrupt再開処理
         if travel_agent_interrupt_state is not None:
@@ -159,11 +165,17 @@ def travel_agent(query: str) -> str:
             # interrupt状態をクリア
             travel_agent_interrupt_state = None
             
-            # エージェントを再開
-            response = agent(interrupt_responses)
+            # エージェントを再開（invocation_stateを渡す）
+            if applicant_name:
+                response = agent(interrupt_responses, applicant_name=applicant_name)
+            else:
+                response = agent(interrupt_responses)
         else:
-            # 通常の実行
-            response = agent(query)
+            # 通常の実行（invocation_stateを渡す）
+            if applicant_name:
+                response = agent(query, applicant_name=applicant_name)
+            else:
+                response = agent(query)
         
         # interrupt処理
         if response.stop_reason == "interrupt":

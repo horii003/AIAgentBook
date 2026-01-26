@@ -10,7 +10,7 @@ Excel形式の経費精算申請書を生成します。
 from typing import List
 from datetime import datetime
 from pathlib import Path
-from strands import tool
+from strands import tool, ToolContext
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 from pydantic import ValidationError
@@ -19,14 +19,14 @@ from models.data_models import RouteInput
 
 
 # 経費精算申請エージェント用の申請書作成ツール
-@tool
+@tool(context=True)
 def receipt_excel_generator(
-    applicant_name: str,
     store_name: str,
     amount: float,
     date: str,
     items: List[str],
-    expense_category: str
+    expense_category: str,
+    tool_context
 ) -> dict:
     """
     Excel形式の経費精算申請書を生成する。
@@ -34,9 +34,10 @@ def receipt_excel_generator(
     経費精算申請エージェントが利用します。
     このツールは領収書データからExcel申請書を作成します。
     金額が30,000円を超える場合はエラーを返します。
+    申請者名はinvocation_stateから自動的に取得されます。
     
     生成されるExcelファイルには以下の情報が含まれます：
-    - 申請者名
+    - 申請者名（invocation_stateから取得）
     - 申請日（自動生成）
     - 店舗名
     - 金額
@@ -48,7 +49,6 @@ def receipt_excel_generator(
     ファイル名は「経費精算申請書_YYYYMMDD_HHMMSS.xlsx」の形式で生成されます。
     
     Args:
-        applicant_name: 申請者名
         store_name: 店舗名
         amount: 金額（円）
         date: 日付（YYYY-MM-DD形式）
@@ -65,6 +65,8 @@ def receipt_excel_generator(
     Raises:
         ValueError: 金額が30,000円を超える場合
     """
+    # invocation_stateから申請者名を取得
+    applicant_name = tool_context.invocation_state.get("applicant_name", "未設定") if tool_context.invocation_state else "未設定"
     # 金額チェック
     approved, message = ApprovalRuleEngine.check_amount(amount)
     if not approved:
@@ -175,10 +177,10 @@ def receipt_excel_generator(
 
 
 # 交通費精算申請エージェント用の申請書作成ツール
-@tool
+@tool(context=True)
 def travel_excel_generator(
     routes: List[dict],
-    user_id: str = "0001"
+    tool_context
 ) -> dict:
 
     """
@@ -187,6 +189,7 @@ def travel_excel_generator(
     交通費精算申請エージェントが利用します。
     このツールは交通費の経路データからExcel申請書を作成します。
     複数の経路を一覧表形式で表示し、合計交通費を計算します。
+    申請者名はinvocation_stateから自動的に取得されます。
     
     Args:
         routes: 経路データのリスト。各要素は以下のキーを持つ辞書:
@@ -196,7 +199,6 @@ def travel_excel_generator(
             - transport_type (str): 交通手段 (train/bus/taxi/airplane)
             - cost (float): 費用
             - notes (str, optional): 備考
-        user_id: ユーザー識別子（デフォルト: "0001"）
     
     Returns:
         dict: {
@@ -206,6 +208,9 @@ def travel_excel_generator(
             "message": str           # 結果メッセージ
         }
     """
+    
+    # invocation_stateから申請者名を取得
+    applicant_name = tool_context.invocation_state.get("applicant_name", "未設定") if tool_context.invocation_state else "未設定"
 
     try:
         # Pydanticモデルでバリデーション
@@ -283,11 +288,11 @@ def travel_excel_generator(
         #申請者情報の作成
         current_row = 3
         
-        #申請者ID
-        ws[f"A{current_row}"] = "申請者ID"
+        #申請者名
+        ws[f"A{current_row}"] = "申請者名"
         ws[f"A{current_row}"].font = label_font
         ws[f"A{current_row}"].fill = label_fill
-        ws[f"B{current_row}"] = user_id
+        ws[f"B{current_row}"] = applicant_name
         current_row += 1
         
         #申請日
