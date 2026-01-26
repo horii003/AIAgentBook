@@ -23,6 +23,7 @@ RECEIPT_EXPENSE_SYSTEM_PROMPT = """あなたは経費精算申請エージェン
 
 3. **Excel申請書の生成**
    - receipt_excel_generatorツールで申請書を生成
+   - 申請者名は自動的に取得されます（引数として渡す必要はありません）
    - 金額が30,000円を超える場合はエラーを返す
 
 ## 処理フロー
@@ -37,6 +38,7 @@ RECEIPT_EXPENSE_SYSTEM_PROMPT = """あなたは経費精算申請エージェン
 - 抽出した情報は必ずユーザーに確認してください
 - 金額が30,000円を超える場合はエラーを通知してください
 - 申請書の生成が完了したら、ファイルパスを明示してください
+- receipt_excel_generatorツールを呼び出す際、applicant_nameパラメータは不要です（自動取得されます）
 
 常に丁寧で分かりやすい日本語で対話してください。
 """
@@ -78,8 +80,8 @@ def _get_receipt_expense_agent() -> Agent:
     return receipt_expense_agent_instance
 
 #Agent as Tools
-@tool
-def receipt_expense_agent(query: str) -> str:
+@tool(context=True)
+def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
     """
     経費精算申請ツール
     
@@ -96,8 +98,16 @@ def receipt_expense_agent(query: str) -> str:
         # エージェントインスタンスを取得（初回は初期化、2回目以降は既存インスタンスを使用）
         agent = _get_receipt_expense_agent()
         
-        # エージェント実行
-        response = agent(query)
+        # invocation_stateから申請者名を取得
+        applicant_name = None
+        if tool_context and tool_context.invocation_state:
+            applicant_name = tool_context.invocation_state.get("applicant_name")
+        
+        # エージェント実行（invocation_stateを渡す）
+        if applicant_name:
+            response = agent(query, applicant_name=applicant_name)
+        else:
+            response = agent(query)
         
         return str(response)
     
