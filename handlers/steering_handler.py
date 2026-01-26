@@ -26,7 +26,11 @@ def setup_steering_logger():
     # console_handler.setLevel(logging.INFO)
     
     # ファイル出力
-    file_handler = logging.FileHandler("logs/steering.log", encoding="utf-8")
+    log_file = "logs/steering.log"
+    log_dir = os.path.dirname(log_file)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir)    
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
     # file_handler.setLevel(logging.INFO)
     
     # フォーマット（詳細フォーマットで統一）
