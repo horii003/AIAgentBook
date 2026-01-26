@@ -67,7 +67,12 @@ def _get_receipt_expense_agent() -> Agent:
             agent_id="receipt_expense_agent",
             name="経費精算申請エージェント",
             description="領収書画像から情報を抽出し、Excel形式の経費精算申請書を自動生成します",
-            callback_handler=None  # ストリーミング出力を無効化
+            callback_handler=None,  # ストリーミング出力を無効化
+            retry_strategy=ModelRetryStrategy(
+                max_attempts=6,
+                initial_delay=4,
+                max_delay=240
+            )
         )
     
     return receipt_expense_agent_instance
@@ -108,3 +113,4 @@ def reset_receipt_expense_agent():
     """
     global receipt_expense_agent_instance
     receipt_expense_agent_instance = None
+
