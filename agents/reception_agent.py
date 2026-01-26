@@ -105,3 +105,4 @@ class ReceptionAgent:
                 print(f"\nエラーが発生しました: {e}")
                 print("もう一度お試しください。\n")    
 
+

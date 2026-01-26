@@ -56,7 +56,7 @@ class TestTravelAgent:
         agent = _get_travel_agent()
         
         assert agent is not None
-        assert len(agent.tools) == 3  # calculate_fare, validate_input, generate_report
+        assert len(agent.tools) == 3  # calculate_fare, validate_input, travel_excel_generator
     
     def test_travel_agent_has_correct_tools(self):
         """travel_agentが正しいツールを持っているかテスト"""
@@ -68,7 +68,7 @@ class TestTravelAgent:
         expected_tools = [
             "calculate_fare",
             "validate_input",
-            "generate_report"
+            "travel_excel_generator"
         ]
         
         for expected_tool in expected_tools:
@@ -105,7 +105,7 @@ class TestReceiptExpenseAgent:
         agent = _get_receipt_expense_agent()
         
         assert agent is not None
-        assert len(agent.tools) == 2  # image_reader, excel_generator
+        assert len(agent.tools) == 2  # image_reader, receipt_excel_generator
     
     def test_receipt_expense_agent_has_correct_tools(self):
         """receipt_expense_agentが正しいツールを持っているかテスト"""
@@ -116,7 +116,7 @@ class TestReceiptExpenseAgent:
         
         expected_tools = [
             "image_reader",
-            "excel_generator"
+            "receipt_excel_generator"
         ]
         
         for expected_tool in expected_tools:

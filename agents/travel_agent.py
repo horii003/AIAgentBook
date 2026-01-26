@@ -4,7 +4,7 @@ from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from tools.fare_tools import load_fare_data, calculate_fare
 from tools.validation_tools import validate_input
-from tools.report_tools import generate_report
+from tools.excel_generator import travel_excel_generator
 from handlers.steering_handler import LoggedSteeringHandler, steering_logger
 
 
@@ -18,8 +18,7 @@ TRAVEL_SYSTEM_PROMPT = """あなたは交通費精算申請エージェントで
 3. 計算結果をユーザーに確認
 4. 次の区間の有無を確認
 5. すべての区間の入力完了後、最終確認
-6. 申請書形式(PDF/JSON)を質問
-7. generate_reportツールで申請書を生成・保存
+6. travel_excel_generatorツールで申請書を生成・保存
 
 重要な注意事項:
 - 必ず一区間ずつ処理してください
@@ -27,18 +26,9 @@ TRAVEL_SYSTEM_PROMPT = """あなたは交通費精算申請エージェントで
 - 交通手段は「train」「bus」「taxi」「airplane」のいずれかです
 - 計算結果は必ずユーザーに確認してください
 - すべての区間の入力が完了したら、最終確認を行ってください
-- 申請書の形式は必ずユーザーに選択してもらってください(PDFまたはJSON)
 
-ルール検証との連携:
-- 申請内容はルール検証エージェントによって自動的にチェックされます
-- 検証結果に基づいて適切に対応してください：
-  * "proceed": そのまま処理を続行
-  * "guide": 提案された修正をユーザーに確認
-  * "interrupt": 処理を一時停止し、ユーザーに詳細確認を求める
-
-generate_reportツールの使用方法:
+travel_excel_generatorツールの使用方法:
 - routesパラメータ: 収集した全経路データのリスト（必須）
-- formatパラメータ: "pdf" または "json"（必須）
 - user_idパラメータ: "0001"（デフォルト値を使用）
 - ツールは1回だけ呼び出してください
 - エラーが発生した場合は、ツールの戻り値のmessageフィールドを確認してください
@@ -109,8 +99,8 @@ def _get_travel_agent() -> Agent:
             system_prompt=TRAVEL_SYSTEM_PROMPT,
             tools=[
                 calculate_fare,
-                # validate_input,
-                generate_report
+                validate_input,
+                travel_excel_generator
             ],
             hooks=[rule_steering],
             conversation_manager=SlidingWindowConversationManager(),
@@ -213,3 +203,4 @@ def reset_travel_agent():
     global travel_agent_instance, travel_agent_interrupt_state
     travel_agent_instance = None
     travel_agent_interrupt_state = None
+

@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from tools.fare_tools import load_fare_data, calculate_fare
 from tools.validation_tools import validate_input
-from tools.report_tools import generate_report
+from tools.excel_generator import travel_excel_generator
 
 
 class TestFareTools:
@@ -174,8 +174,8 @@ class TestValidationTools:
         assert "数値" in result["message"]
 
 
-class TestReportTools:
-    """申請書生成ツールのテスト"""
+class TestExcelGeneratorTools:
+    """Excel申請書生成ツールのテスト"""
     
     @pytest.fixture
     def sample_routes(self):
@@ -199,70 +199,33 @@ class TestReportTools:
             }
         ]
     
-    def test_generate_report_pdf(self, sample_routes):
-        """PDF申請書の生成テスト"""
-        result = generate_report(
+    def test_generate_excel_report(self, sample_routes):
+        """Excel申請書の生成テスト"""
+        result = travel_excel_generator(
             routes=sample_routes,
-            format="pdf",
             user_id="test001"
         )
         
         assert result["success"] is True
         assert result["total_cost"] == 420
         assert os.path.exists(result["file_path"])
-        assert result["file_path"].endswith(".pdf")
+        assert result["file_path"].endswith(".xlsx")
         
         # テスト後のクリーンアップ
         if os.path.exists(result["file_path"]):
             os.remove(result["file_path"])
     
-    def test_generate_report_json(self, sample_routes):
-        """JSON申請書の生成テスト"""
-        result = generate_report(
-            routes=sample_routes,
-            format="json",
-            user_id="test002"
-        )
-        
-        assert result["success"] is True
-        assert result["total_cost"] == 420
-        assert os.path.exists(result["file_path"])
-        assert result["file_path"].endswith(".json")
-        
-        # JSONファイルの内容を確認
-        with open(result["file_path"], "r", encoding="utf-8") as f:
-            data = json.load(f)
-            assert data["user_id"] == "test002"
-            assert data["total_cost"] == 420
-            assert len(data["routes"]) == 2
-        
-        # テスト後のクリーンアップ
-        if os.path.exists(result["file_path"]):
-            os.remove(result["file_path"])
-    
-    def test_generate_report_empty_routes(self):
+    def test_generate_excel_empty_routes(self):
         """空の経路データでの申請書生成テスト"""
-        result = generate_report(
+        result = travel_excel_generator(
             routes=[],
-            format="pdf",
             user_id="test003"
         )
         
         assert result["success"] is False
         assert "空" in result["message"]
     
-    def test_generate_report_invalid_format(self, sample_routes):
-        """無効な形式での申請書生成テスト"""
-        result = generate_report(
-            routes=sample_routes,
-            format="invalid",
-            user_id="test004"
-        )
-        
-        assert result["success"] is False
-        assert "無効な形式" in result["message"]
-    
-    def test_generate_report_missing_keys(self):
+    def test_generate_excel_missing_keys(self):
         """必須キーが不足している経路データのテスト"""
         invalid_routes = [
             {
@@ -273,9 +236,8 @@ class TestReportTools:
             }
         ]
         
-        result = generate_report(
+        result = travel_excel_generator(
             routes=invalid_routes,
-            format="pdf",
             user_id="test005"
         )
         

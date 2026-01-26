@@ -3,7 +3,7 @@ from strands import Agent, tool, ToolContext
 from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_tools import image_reader
-from tools.excel_generator import excel_generator
+from tools.excel_generator import receipt_excel_generator
 
 
 # システムプロンプト
@@ -22,7 +22,7 @@ RECEIPT_EXPENSE_SYSTEM_PROMPT = """あなたは経費精算申請エージェン
      * その他経費: 上記以外
 
 3. **Excel申請書の生成**
-   - excel_generatorツールで申請書を生成
+   - receipt_excel_generatorツールで申請書を生成
    - 金額が30,000円を超える場合はエラーを返す
 
 ## 処理フロー
@@ -30,7 +30,7 @@ RECEIPT_EXPENSE_SYSTEM_PROMPT = """あなたは経費精算申請エージェン
 2. image_readerツールで画像から情報を抽出
 3. 抽出した情報をユーザーに確認
 4. 必要に応じて修正を受け付ける
-5. excel_generatorツールで申請書を生成・保存
+5. receipt_excel_generatorツールで申請書を生成・保存
 
 ## 重要な注意事項
 - 領収書画像のパスは必ず確認してください
@@ -61,7 +61,7 @@ def _get_receipt_expense_agent() -> Agent:
             system_prompt=RECEIPT_EXPENSE_SYSTEM_PROMPT,
             tools=[
                 image_reader,
-                excel_generator
+                receipt_excel_generator
             ],
             conversation_manager=SlidingWindowConversationManager(),
             agent_id="receipt_expense_agent",
@@ -113,3 +113,4 @@ def reset_receipt_expense_agent():
     """
     global receipt_expense_agent_instance
     receipt_expense_agent_instance = None
+

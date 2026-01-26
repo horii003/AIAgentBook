@@ -6,7 +6,7 @@ from agents.reception_agent import ReceptionAgent
 from agents.travel_agent import travel_agent, reset_travel_agent
 from agents.receipt_expense_agent import receipt_expense_agent, reset_receipt_expense_agent
 from tools.fare_tools import calculate_fare
-from tools.report_tools import generate_report
+from tools.excel_generator import travel_excel_generator
 
 
 class TestEndToEndWorkflow:
@@ -51,38 +51,19 @@ class TestEndToEndWorkflow:
             "notes": ""
         })
         
-        # 2. 申請書の生成（PDF）
-        result_pdf = generate_report(
+        # 2. 申請書の生成（Excel）
+        result_excel = travel_excel_generator(
             routes=routes,
-            format="pdf",
             user_id="integration_test"
         )
         
-        assert result_pdf["success"] is True
-        assert os.path.exists(result_pdf["file_path"])
-        assert result_pdf["total_cost"] == fare1["cost"] + fare2["cost"]
-        
-        # 3. 申請書の生成（JSON）
-        result_json = generate_report(
-            routes=routes,
-            format="json",
-            user_id="integration_test"
-        )
-        
-        assert result_json["success"] is True
-        assert os.path.exists(result_json["file_path"])
-        
-        # JSONファイルの内容を確認
-        with open(result_json["file_path"], "r", encoding="utf-8") as f:
-            data = json.load(f)
-            assert len(data["routes"]) == 2
-            assert data["total_cost"] == result_pdf["total_cost"]
+        assert result_excel["success"] is True
+        assert os.path.exists(result_excel["file_path"])
+        assert result_excel["total_cost"] == fare1["cost"] + fare2["cost"]
         
         # クリーンアップ
-        if os.path.exists(result_pdf["file_path"]):
-            os.remove(result_pdf["file_path"])
-        if os.path.exists(result_json["file_path"]):
-            os.remove(result_json["file_path"])
+        if os.path.exists(result_excel["file_path"]):
+            os.remove(result_excel["file_path"])
     
     def test_multiple_transport_types(self):
         """複数の交通手段を使用したワークフローのテスト"""
@@ -133,9 +114,8 @@ class TestEndToEndWorkflow:
         })
         
         # 申請書生成
-        result = generate_report(
+        result = travel_excel_generator(
             routes=routes,
-            format="pdf",
             user_id="multi_transport_test"
         )
         
@@ -213,7 +193,7 @@ class TestErrorHandling:
         assert "見つかりません" in fare["message"]
     
     def test_invalid_format_handling(self):
-        """無効な形式のエラーハンドリングテスト"""
+        """無効なデータのエラーハンドリングテスト"""
         routes = [{
             "departure": "渋谷",
             "destination": "東京",
@@ -223,20 +203,20 @@ class TestErrorHandling:
             "notes": ""
         }]
         
-        result = generate_report(
-            routes=routes,
-            format="invalid_format",
+        # 必須キーが不足している場合のテスト
+        invalid_routes = [{"departure": "渋谷"}]
+        result = travel_excel_generator(
+            routes=invalid_routes,
             user_id="error_test"
         )
         
         assert result["success"] is False
-        assert "無効な形式" in result["message"]
+        assert "不足" in result["message"]
     
     def test_empty_routes_handling(self):
         """空の経路データのエラーハンドリングテスト"""
-        result = generate_report(
+        result = travel_excel_generator(
             routes=[],
-            format="pdf",
             user_id="empty_test"
         )
         
