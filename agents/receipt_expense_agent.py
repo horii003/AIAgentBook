@@ -39,6 +39,13 @@ RECEIPT_EXPENSE_SYSTEM_PROMPT = """あなたは経費精算申請エージェン
 - 金額が30,000円を超える場合はエラーを通知してください
 - 申請書の生成が完了したら、ファイルパスを明示してください
 
+ルール検証との連携:
+- 申請内容はルール検証エージェントによって自動的にチェックされます
+- 検証結果に基づいて適切に対応してください：
+  * "proceed": そのまま処理を続行
+  * "guide": 提案された修正をユーザーに確認
+  * "interrupt": 処理を一時停止し、ユーザーに詳細確認を求める
+ 
 常に丁寧で分かりやすい日本語で対話してください。
 """
 # 検証ルール
@@ -48,6 +55,7 @@ rule_steering = LoggedSteeringHandler(
 
 あなたの役割:
 メインエージェントが交通費申請を処理する際に、コンテキストに応じたガイダンスを提供します。
+ただし、image_readerツール利用時は検証は実施しません。
 
 申請ルール:
 １．日付：過去3か月を超える場合は修正提案をし、直らなければユーザーの確認を求める
@@ -177,12 +185,12 @@ def receipt_expense_agent(query: str) -> str:
             
             return "\n".join(interrupt_messages) + "\n\n上記の確認が必要です。承認する場合は「承認」または「y」、拒否する場合は「拒否」または「n」と入力してください。"
         
-        steering_logger.info("Travel agent response generated")
+        steering_logger.info("Reciept expense agent response generated")
                 
         return str(response)
     
     except Exception as e:
-        steering_logger.error(f"Travel agent error: {str(e)}")
+        steering_logger.error(f"Reciept expense  agent error: {str(e)}")
         # エラー時はinterrupt状態をクリア
         receipt_expense_agent_interrupt_state = None
         return f"エラーが発生しました: {e}"
