@@ -52,7 +52,12 @@ class ReceptionAgent:
             agent_id="reception_agent",
             name="申請受付窓口エージェント",
             description="ユーザーからの申請内容を受け付け、適切な専門エージェントに振り分けます",
-            callback_handler=None  # ストリーミング出力を無効化
+            callback_handler=None,  # ストリーミング出力を無効化
+            retry_strategy=ModelRetryStrategy(
+                max_attempts=6,
+                initial_delay=4,
+                max_delay=240
+            )
         )
 
 
@@ -99,4 +104,5 @@ class ReceptionAgent:
             except Exception as e:
                 print(f"\nエラーが発生しました: {e}")
                 print("もう一度お試しください。\n")    
+
 
