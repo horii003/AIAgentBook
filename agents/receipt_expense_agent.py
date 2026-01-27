@@ -65,7 +65,11 @@ def _get_receipt_expense_agent() -> Agent:
                 image_reader,
                 receipt_excel_generator
             ],
-            conversation_manager=SlidingWindowConversationManager(),
+            conversation_manager=SlidingWindowConversationManager(
+                window_size=15,  # 専門エージェントは特定タスクに集中するため小さめ
+                should_truncate_results=True,
+                per_turn=False
+            ),
             agent_id="receipt_expense_agent",
             name="経費精算申請エージェント",
             description="領収書画像から情報を抽出し、Excel形式の経費精算申請書を自動生成します",

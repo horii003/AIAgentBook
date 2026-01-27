@@ -10,6 +10,7 @@
 
 from strands import Agent
 from strands import ModelRetryStrategy
+from strands.agent.conversation_manager import SlidingWindowConversationManager
 from agents.travel_agent import travel_agent, reset_travel_agent
 from agents.receipt_expense_agent import receipt_expense_agent, reset_receipt_expense_agent
 
@@ -49,6 +50,11 @@ class ReceptionAgent:
             model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
             system_prompt=RECEPTION_SYSTEM_PROMPT,
             tools=[travel_agent, receipt_expense_agent],
+            conversation_manager=SlidingWindowConversationManager(
+                window_size=30,  # オーケストレーターは複数エージェントとのやり取りを保持するため大きめ
+                should_truncate_results=True,
+                per_turn=False
+            ),
             agent_id="reception_agent",
             name="申請受付窓口エージェント",
             description="ユーザーからの申請内容を受け付け、適切な専門エージェントに振り分けます",
