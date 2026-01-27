@@ -101,7 +101,11 @@ def _get_travel_agent() -> Agent:
                 travel_excel_generator
             ],
             hooks=[rule_steering],
-            conversation_manager=SlidingWindowConversationManager(),
+            conversation_manager=SlidingWindowConversationManager(
+                window_size=20,  # 複数区間の情報を保持する必要があるため中程度
+                should_truncate_results=True,
+                per_turn=False
+            ),
             agent_id="travel_agent",
             name="交通費精算申請エージェント",
             description="ユーザーから移動情報を収集し、交通費を計算して申請書を作成します",
