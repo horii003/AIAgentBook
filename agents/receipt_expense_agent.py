@@ -5,7 +5,6 @@ from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_tools import image_reader
 from tools.excel_generator import receipt_excel_generator
-# from handlers.steering_handler import LoggedSteeringHandler, steering_logger
 
 
 def _get_receipt_expense_system_prompt() -> str:
@@ -19,7 +18,7 @@ def _get_receipt_expense_system_prompt() -> str:
 - 今日の日付: {today.strftime('%Y年%m月%d日')} ({today.strftime('%Y-%m-%d')})
 - 3ヶ月前の日付: {three_months_ago.strftime('%Y年%m月%d日')} ({three_months_ago.strftime('%Y-%m-%d')})
 - 申請可能な最古の日付: {three_months_ago.strftime('%Y-%m-%d')}
-- **重要**: 領収書の日付が {three_months_ago.strftime('%Y-%m-%d')} 以降であれば、過去3ヶ月以内として申請可能です
+- **重要**: 領収書の日付が {three_months_ago.strftime('%Y-%m-%d')} ～{today.strftime('%Y-%m-%d')}の範囲であれば、過去3ヶ月以内として申請可能です
 
 ## 役割
 
@@ -44,7 +43,7 @@ def _get_receipt_expense_system_prompt() -> str:
   * まず、ユーザーに日付の確認と修正を提案してください
   * 修正されない場合は、業務上の正当な理由を確認してください
   * 正当な理由がない場合は申請を受け付けないでください
-- 領収書の日付が {three_months_ago.strftime('%Y-%m-%d')} 以降の場合：
+- 領収書の日付が {three_months_ago.strftime('%Y-%m-%d')} ～{today.strftime('%Y-%m-%d')}の範囲である場合：
   * 日付チェックは問題ありません（次のステップに進んでください）
 
 ### 2. 金額チェック
@@ -67,7 +66,7 @@ def _get_receipt_expense_system_prompt() -> str:
 2. image_readerツールで画像から情報を抽出
 3. 抽出した情報をユーザーに確認
 4. **経費申請ルールに基づいてチェック**：
-   - 日付が {three_months_ago.strftime('%Y-%m-%d')} 以降か確認
+   - 日付が{three_months_ago.strftime('%Y-%m-%d')} ～{today.strftime('%Y-%m-%d')}の範囲か確認
    - 5,000円超の場合は上長承認を確認
    - 業務目的を確認
 5. 必要に応じて修正を受け付ける
@@ -81,43 +80,9 @@ def _get_receipt_expense_system_prompt() -> str:
  
 常に丁寧で分かりやすい日本語で対話してください。
 """
-# # 検証ルール
-# rule_steering = LoggedSteeringHandler(
-#     system_prompt="""あなたは交通費精算のルール検証エージェントです。
-# メインエージェントの申請内容を検証し、適切なガイダンスを提供してください。
-
-# あなたの役割:
-# メインエージェントが交通費申請を処理する際に、コンテキストに応じたガイダンスを提供します。
-# ただし、image_readerツール利用時は検証は実施しません。
-
-# 申請ルール:
-# １．日付：過去3か月を超える場合は修正提案をし、直らなければユーザーの確認を求める
-# ２．5000円を超える申請は事前に上長承認しているかをユーザーに確認する
-# ３．目的が業務関連か確認し、業務目的と判断できない場合は、ユーザーに詳細な目的確認を求める
-
-# 判断基準と応答:
-# - ルール準拠 → "proceed": 処理を続行してよい
-# - 軽微な違反 → "guide": メインエージェントに修正提案を促す具体的なガイダンスを提供
-# - 重大な違反 → "interrupt": 人間の確認が必要（注意：interruptは実際にエージェントを停止させます）
-
-# 重要: interruptを使用する場合の条件
-# - 5000円を超える申請で上長承認の確認が取れていない場合
-# - 業務目的が不明確で高額（5000円以上）の申請の場合
-# - 過去3か月を超える日付で業務上の正当な理由が不明な場合
-
-# 応答形式:
-# 判断結果と理由を明確に示してください。
-# 例：
-# - "proceed: すべてのルールに準拠しています"
-# - "guide: 日付が3か月以上前です。ユーザーに確認を求めてください"
-# - "interrupt: 業務目的が不明確で、高額（10000円）です。上長の承認確認が必要です"
-# """
-# )
 
 # グローバル変数
 receipt_expense_agent_instance = None
-# receipt_expense_agent_interrupt_state = None  # interrupt状態を保持
-
 
 def _get_receipt_expense_agent() -> Agent:
     """
@@ -137,7 +102,6 @@ def _get_receipt_expense_agent() -> Agent:
                 image_reader,
                 receipt_excel_generator
             ],
-            # hooks=[rule_steering],
             conversation_manager=SlidingWindowConversationManager(),
             agent_id="receipt_expense_agent",
             name="経費精算申請エージェント",
@@ -168,65 +132,16 @@ def receipt_expense_agent(query: str) -> str:
         str: エージェントからの応答
     """
 
-    # global receipt_expense_agent_interrupt_state
 
     try:
-        # steering_logger.info(f"Receipt expense agent called: {query[:100]}...")
-
         # エージェントインスタンスを取得（初回は初期化、2回目以降は既存インスタンスを使用）
         agent = _get_receipt_expense_agent()
         
-        # # interrupt再開処理
-        # if receipt_expense_agent_interrupt_state is not None:
-        #     steering_logger.info("Resuming from interrupt...")
-            
-        #     # ユーザーの応答を解析
-        #     user_response = query.lower().strip()
-        #     approval = "y" if user_response in ["承認", "y", "yes", "はい", "ok"] else "n"
-            
-        #     # interruptResponseを作成
-        #     interrupt_responses = []
-        #     for interrupt in receipt_expense_agent_interrupt_state.interrupts:
-        #         interrupt_responses.append({
-        #             "interruptResponse": {
-        #                 "interruptId": interrupt.id,
-        #                 "response": approval
-        #             }
-        #         })
-            
-        #     # interrupt状態をクリア
-        #     receipt_expense_agent_interrupt_state = None
-            
-        #     # エージェントを再開
-        #     response = agent(interrupt_responses)
-        # else:
-        #     # 通常の実行
-        #     response = agent(query)
         response = agent(query)
-
-        # # interrupt処理
-        # if response.stop_reason == "interrupt":
-        #     steering_logger.warning(f"Agent interrupted: {len(response.interrupts)} interrupt(s)")
-            
-        #     # interrupt状態を保存
-        #     receipt_expense_agent_interrupt_state = response
-            
-        #     # interrupt情報を整形して返す
-        #     interrupt_messages = []
-        #     for interrupt in response.interrupts:
-        #         reason = interrupt.reason if hasattr(interrupt, 'reason') else "確認が必要です"
-        #         interrupt_messages.append(f"[重要な確認] {reason}")
-            
-        #     return "\n".join(interrupt_messages) + "\n\n上記の確認が必要です。承認する場合は「承認」または「y」、拒否する場合は「拒否」または「n」と入力してください。"
-        
-        # steering_logger.info("Reciept expense agent response generated")
                 
         return str(response)
     
     except Exception as e:
-        # steering_logger.error(f"Reciept expense  agent error: {str(e)}")
-        # # エラー時はinterrupt状態をクリア
-        # receipt_expense_agent_interrupt_state = None
         return f"エラーが発生しました: {e}"
 
 
@@ -238,5 +153,4 @@ def reset_receipt_expense_agent():
     """
     global receipt_expense_agent_instance
     receipt_expense_agent_instance = None
-    # receipt_expense_agent_interrupt_state = None
 
