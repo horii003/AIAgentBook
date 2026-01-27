@@ -10,7 +10,7 @@ from handlers.error_handler import ErrorHandler
 load_dotenv()
 
 # logger
-log_level = os.environ['LOG_LEVEL'] if os.environ['LOG_LEVEL'] is None else "INFO"
+log_level = os.getenv("LOG_LEVEL", "INFO")
 logging.getLogger("strands").setLevel(log_level)
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",

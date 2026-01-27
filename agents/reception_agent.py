@@ -134,7 +134,10 @@ class ReceptionAgent:
                 
                 # エージェントの実行（専門エージェントツールが自動的に呼び出される）
                 # invocation_stateとして申請者名を渡す
-                response = self.agent(user_input, applicant_name=self._applicant_name)
+                response = self.agent(
+                    user_input, 
+                    invocation_state={"applicant_name": self._applicant_name}
+                )
                 print(f"\nエージェント: {response}")
                 
             except KeyboardInterrupt:
