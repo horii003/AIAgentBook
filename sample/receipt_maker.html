@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>receipt</title>
+    <style>
+        /* 基本設定 */
+        body {
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* 入力フォームのスタイル */
+        .editor-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            display: flex;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+        .form-group label {
+            width: 120px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        .form-group input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .btn {
+            flex: 1;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: bold;
+            color: white;
+        }
+        .print-btn { background-color: #28a745; }
+        .print-btn:hover { background-color: #218838; }
+        .image-btn { background-color: #007bff; }
+        .image-btn:hover { background-color: #0069d9; }
+
+        /* 領収書プレビューのスタイル */
+        .receipt-preview {
+            background: white;
+            width: 800px;
+            min-height: 450px; /* 最小高さは維持 */
+            padding: 40px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+        .receipt-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .receipt-no-date { text-align: right; font-size: 0.9em; }
+
+        .receipt-title {
+            text-align: center;
+            font-size: 28px;
+            font-weight: bold;
+            letter-spacing: 10px;
+            margin: 10px 0 20px 0;
+            text-decoration: underline;
+            text-underline-offset: 8px;
+        }
+
+        .receipt-to {
+            font-size: 20px;
+            border-bottom: 1px solid #000;
+            min-width: 350px;
+            padding-bottom: 5px;
+            margin-top: 10px;
+            display: inline-block;
+        }
+        .receipt-to::after { content: " 様"; font-size: 16px; }
+
+        .amount-box {
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+            margin: 25px 0;
+            padding: 12px 0;
+        }
+        .amount-box span::before { content: "￥"; padding-right: 5px; }
+        .amount-box span::after { content: " -"; }
+
+        .receipt-proviso {
+            border-bottom: 1px solid #000;
+            display: inline-block;
+            min-width: 250px;
+            margin-left: 5px;
+        }
+
+        /* 下部エリアを底に固定 */
+        .receipt-footer {
+            margin-top: auto; /* これで下部に押し出す */
+            padding-top: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .stamp-box {
+            width: 80px;
+            height: 80px;
+            border: 1px dashed #999;
+            color: #999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        .company-info { text-align: right; line-height: 1.6; }
+
+        /* 印刷用設定 */
+        @media print {
+            body { background-color: white; padding: 0; }
+            .editor-container { display: none; }
+            .receipt-preview { box-shadow: none; border: none; width: 100%; margin: 0; }
+            @page { size: landscape; margin: 15mm; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="editor-container">
+        <h2 style="margin-top:0">領収書情報入力</h2>
+        <div class="form-group"><label>領収書番号</label><input type="text" id="input-no" placeholder="001" oninput="updateReceipt()"></div>
+        <div class="form-group"><label>日付</label><input type="date" id="input-date" oninput="updateReceipt()"></div>
+        <div class="form-group"><label>宛名</label><input type="text" id="input-to" placeholder="株式会社サンプル" oninput="updateReceipt()"></div>
+        <div class="form-group"><label>金額</label><input type="number" id="input-amount" placeholder="50000" oninput="updateReceipt()"></div>
+        <div class="form-group"><label>但書き</label><input type="text" id="input-proviso" placeholder="お品代として" oninput="updateReceipt()"></div>
+        <div class="form-group"><label>会社名</label><input type="text" id="input-company" placeholder="株式会社 〇〇" oninput="updateReceipt()"></div>
+        
+        <div class="button-group">
+            <button class="btn print-btn" onclick="window.print()">印刷 / PDF保存</button>
+            <button class="btn image-btn" onclick="downloadImage()">画像として保存 (PNG)</button>
+        </div>
+    </div>
+
+    <!-- 領収書プレビューエリア -->
+    <div class="receipt-preview" id="receipt-area">
+        <div class="receipt-header">
+            <div><span id="view-no">No. </span></div>
+            <div class="receipt-no-date"><span id="view-date">202X年XX月XX日</span></div>
+        </div>
+        
+        <div class="receipt-title">領収証</div>
+        
+        <div>
+            <div class="receipt-to"><span id="view-to">（宛名）</span></div>
+        </div>
+        
+        <div class="amount-box">金額 <span id="view-amount">0</span></div>
+        
+        <div style="margin-bottom: 10px;">
+            但<span class="receipt-proviso" id="view-proviso">（但書き）</span>
+        </div>
+        
+        <div class="receipt-footer">
+            <div class="stamp-box">収入印紙<br>を貼付</div>
+            <div class="company-info">
+                <div id="view-company" style="font-weight: bold; font-size: 1.2em;">（発行元会社名）</div>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="export-canvas" width="800" height="480" style="display:none;"></canvas>
+
+    <script>
+        function updateReceipt() {
+            const no = document.getElementById('input-no').value;
+            const dateVal = document.getElementById('input-date').value;
+            const to = document.getElementById('input-to').value;
+            const amount = document.getElementById('input-amount').value || '0';
+            const proviso = document.getElementById('input-proviso').value;
+            const company = document.getElementById('input-company').value;
+
+            document.title = no ? `receipt-${no}` : `receipt`;
+
+            let dateString = '202X年XX月XX日';
+            if (dateVal) {
+                const d = new Date(dateVal);
+                dateString = `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+            }
+
+            document.getElementById('view-no').textContent = 'No. ' + (no || '      ');
+            document.getElementById('view-date').textContent = dateString;
+            document.getElementById('view-to').textContent = to || '　　　　　　';
+            document.getElementById('view-amount').textContent = Number(amount).toLocaleString();
+            document.getElementById('view-proviso').textContent = proviso || '　　　　　　';
+            document.getElementById('view-company').textContent = company || '（会社名未入力）';
+        }
+
+        function downloadImage() {
+            const canvas = document.getElementById('export-canvas');
+            const ctx = canvas.getContext('2d');
+            const no = document.getElementById('input-no').value || "000";
+
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#000000";
+            
+            ctx.font = "16px sans-serif";
+            ctx.textAlign = "left";
+            ctx.fillText(document.getElementById('view-no').textContent, 40, 50);
+            ctx.textAlign = "right";
+            ctx.fillText(document.getElementById('view-date').textContent, 760, 50);
+
+            ctx.textAlign = "center";
+            ctx.font = "bold 32px sans-serif";
+            ctx.fillText("領 収 証", 400, 100);
+            ctx.fillRect(320, 110, 160, 2);
+
+            ctx.textAlign = "left";
+            ctx.font = "22px sans-serif";
+            ctx.fillText(document.getElementById('view-to').textContent + " 様", 40, 170);
+            ctx.fillRect(40, 180, 400, 1);
+
+            ctx.fillRect(40, 215, 720, 2);
+            ctx.fillRect(40, 285, 720, 2);
+            ctx.font = "bold 36px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("金額 ￥ " + document.getElementById('view-amount').textContent + " -", 400, 265);
+
+            ctx.textAlign = "left";
+            ctx.font = "18px sans-serif";
+            ctx.fillText("但 " + document.getElementById('view-proviso').textContent, 40, 335);
+            ctx.fillRect(70, 340, 300, 1);
+
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(40, 370, 80, 80);
+            ctx.setLineDash([]);
+            ctx.font = "12px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("収入印紙", 80, 405);
+            ctx.fillText("を貼付", 80, 425);
+
+            ctx.textAlign = "right";
+            ctx.font = "bold 20px sans-serif";
+            ctx.fillText(document.getElementById('view-company').textContent, 760, 420);
+
+            const link = document.createElement('a');
+            link.download = `receipt-${no}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        window.onload = updateReceipt;
+    </script>
+</body>
+</html>
