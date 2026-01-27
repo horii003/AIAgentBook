@@ -10,6 +10,7 @@
 
 from strands import Agent
 from strands import ModelRetryStrategy
+from strands.agent.conversation_manager import SlidingWindowConversationManager
 from agents.travel_agent import travel_agent, reset_travel_agent
 from agents.receipt_expense_agent import receipt_expense_agent, reset_receipt_expense_agent
 
@@ -49,6 +50,11 @@ class ReceptionAgent:
             model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
             system_prompt=RECEPTION_SYSTEM_PROMPT,
             tools=[travel_agent, receipt_expense_agent],
+            conversation_manager=SlidingWindowConversationManager(
+                window_size=30,  # オーケストレーターは複数エージェントとのやり取りを保持するため大きめ
+                should_truncate_results=True,
+                per_turn=False
+            ),
             agent_id="reception_agent",
             name="申請受付窓口エージェント",
             description="ユーザーからの申請内容を受け付け、適切な専門エージェントに振り分けます",
@@ -59,7 +65,32 @@ class ReceptionAgent:
                 max_delay=240
             )
         )
+        self._applicant_initialized = False
+        self._applicant_name = None  # 申請者名を保持
 
+
+    def _initialize_applicant_info(self):
+        """申請者情報を初期化"""
+        if self._applicant_initialized:
+            return
+        
+        print("\n" + "=" * 60)
+        print("初期設定")
+        print("=" * 60)
+        
+        # 申請者名の入力
+        while True:
+            applicant_name = input("申請者名を入力してください: ").strip()
+            if applicant_name:
+                break
+            print("申請者名は必須です。もう一度入力してください。")
+        
+        # インスタンス変数に保存
+        self._applicant_name = applicant_name
+        self._applicant_initialized = True
+        
+        print(f"\n申請者情報を登録しました: {applicant_name}")
+        print("=" * 60)
 
     # 実行
     def run(self):
@@ -71,6 +102,9 @@ class ReceptionAgent:
         print("※終了するには 'exit' または 'quit' と入力ください")
         print("※最初からやり直すには 'reset' と入力ください")
         print("=" * 60)
+        
+        # 申請者情報の初期化
+        self._initialize_applicant_info()
 
         # 対話ループ
         while True:
@@ -87,7 +121,11 @@ class ReceptionAgent:
                 if user_input.lower() in ["reset", "リセット", "最初から"]:
                     reset_travel_agent()
                     reset_receipt_expense_agent()
-                    print("\nエージェント: 会話履歴をリセットしました。新しい申請を開始できます。")
+                    self._applicant_name = None
+                    self._applicant_initialized = False
+                    print("\nエージェント: 会話履歴と申請者情報をリセットしました。")
+                    self._initialize_applicant_info()
+                    print("新しい申請を開始できます。")
                     continue
                 
                 # 空入力のスキップ
@@ -95,7 +133,11 @@ class ReceptionAgent:
                     continue
                 
                 # エージェントの実行（専門エージェントツールが自動的に呼び出される）
-                response = self.agent(user_input)
+                # invocation_stateとして申請者名を渡す
+                response = self.agent(
+                    user_input, 
+                    invocation_state={"applicant_name": self._applicant_name}
+                )
                 print(f"\nエージェント: {response}")
                 
             except KeyboardInterrupt:

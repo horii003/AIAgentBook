@@ -10,21 +10,23 @@ Excel形式の経費精算申請書を生成します。
 from typing import List
 from datetime import datetime
 from pathlib import Path
-from strands import tool
+from strands import tool, ToolContext
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
+from pydantic import ValidationError
 from handlers.approval_rules import ApprovalRuleEngine
+from models.data_models import RouteInput
 
 
 # 経費精算申請エージェント用の申請書作成ツール
-@tool
+@tool(context=True)
 def receipt_excel_generator(
-    applicant_name: str,
     store_name: str,
     amount: float,
     date: str,
     items: List[str],
-    expense_category: str
+    expense_category: str,
+    tool_context
 ) -> dict:
     """
     Excel形式の経費精算申請書を生成する。
@@ -32,9 +34,10 @@ def receipt_excel_generator(
     経費精算申請エージェントが利用します。
     このツールは領収書データからExcel申請書を作成します。
     金額が30,000円を超える場合はエラーを返します。
+    申請者名はinvocation_stateから自動的に取得されます。
     
     生成されるExcelファイルには以下の情報が含まれます：
-    - 申請者名
+    - 申請者名（invocation_stateから取得）
     - 申請日（自動生成）
     - 店舗名
     - 金額
@@ -46,7 +49,6 @@ def receipt_excel_generator(
     ファイル名は「経費精算申請書_YYYYMMDD_HHMMSS.xlsx」の形式で生成されます。
     
     Args:
-        applicant_name: 申請者名
         store_name: 店舗名
         amount: 金額（円）
         date: 日付（YYYY-MM-DD形式）
@@ -63,6 +65,8 @@ def receipt_excel_generator(
     Raises:
         ValueError: 金額が30,000円を超える場合
     """
+    # invocation_stateから申請者名を取得
+    applicant_name = tool_context.invocation_state.get("applicant_name", "未設定") if tool_context.invocation_state else "未設定"
     # 金額チェック
     approved, message = ApprovalRuleEngine.check_amount(amount)
     if not approved:
@@ -173,10 +177,10 @@ def receipt_excel_generator(
 
 
 # 交通費精算申請エージェント用の申請書作成ツール
-@tool
+@tool(context=True)
 def travel_excel_generator(
     routes: List[dict],
-    user_id: str = "0001"
+    tool_context
 ) -> dict:
 
     """
@@ -185,6 +189,7 @@ def travel_excel_generator(
     交通費精算申請エージェントが利用します。
     このツールは交通費の経路データからExcel申請書を作成します。
     複数の経路を一覧表形式で表示し、合計交通費を計算します。
+    申請者名はinvocation_stateから自動的に取得されます。
     
     Args:
         routes: 経路データのリスト。各要素は以下のキーを持つ辞書:
@@ -194,7 +199,6 @@ def travel_excel_generator(
             - transport_type (str): 交通手段 (train/bus/taxi/airplane)
             - cost (float): 費用
             - notes (str, optional): 備考
-        user_id: ユーザー識別子（デフォルト: "0001"）
     
     Returns:
         dict: {
@@ -204,9 +208,12 @@ def travel_excel_generator(
             "message": str           # 結果メッセージ
         }
     """
+    
+    # invocation_stateから申請者名を取得
+    applicant_name = tool_context.invocation_state.get("applicant_name", "未設定") if tool_context.invocation_state else "未設定"
 
     try:
-        #routesの事前検証
+        # Pydanticモデルでバリデーション
         if not routes:
             return {
                 "success": False,
@@ -215,42 +222,26 @@ def travel_excel_generator(
                 "message": "エラー: 経路データが空です"
             }
         
-
-        if not isinstance(routes, list):
-            return {
-                "success": False,
-                "file_path": "",
-                "total_cost": 0,
-                "message": f"エラー: routesはリストである必要があります（受信: {type(routes).__name__}）"
-            }
-        
-
-        #各経路データのチェック
-        required_keys = ["departure", "destination", "transport_type", "cost"]
+        # 各経路データをPydanticモデルで検証
+        validated_routes = []
         for i, route in enumerate(routes):
-
-            # 辞書型かチェック
-            if not isinstance(route, dict):
+            try:
+                validated_route = RouteInput(**route)
+                validated_routes.append(validated_route)
+            except ValidationError as e:
+                error_messages = []
+                for error in e.errors():
+                    field = ".".join(str(loc) for loc in error["loc"])
+                    error_messages.append(f"{field}: {error['msg']}")
                 return {
                     "success": False,
                     "file_path": "",
                     "total_cost": 0,
-                    "message": f"エラー: 経路{i+1}が辞書形式ではありません"
+                    "message": f"エラー: 経路{i+1}のデータが不正です - {', '.join(error_messages)}"
                 }
-
-            #必須キーの確認
-            missing_keys = [key for key in required_keys if key not in route]
-            if missing_keys:
-                return {
-                    "success": False,
-                    "file_path": "",
-                    "total_cost": 0,
-                    "message": f"エラー: 経路{i+1}に必須キーが不足しています: {missing_keys}"
-                }
-
         
-        #合計交通費の計算
-        total_cost = sum(float(route.get("cost", 0)) for route in routes)
+        # 合計交通費の計算
+        total_cost = sum(route.cost for route in validated_routes)
         
         #ファイル名の生成
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -297,11 +288,11 @@ def travel_excel_generator(
         #申請者情報の作成
         current_row = 3
         
-        #申請者ID
-        ws[f"A{current_row}"] = "申請者ID"
+        #申請者名
+        ws[f"A{current_row}"] = "申請者名"
         ws[f"A{current_row}"].font = label_font
         ws[f"A{current_row}"].fill = label_fill
-        ws[f"B{current_row}"] = user_id
+        ws[f"B{current_row}"] = applicant_name
         current_row += 1
         
         #申請日
@@ -336,31 +327,31 @@ def travel_excel_generator(
             "airplane": "飛行機"
         }
         
-        for i, route in enumerate(routes, start=1):
+        for i, route in enumerate(validated_routes, start=1):
             # No列（A列）
             ws[f"A{current_row}"] = i
             ws[f"A{current_row}"].alignment = data_alignment_center
             
             # 日付列（B列）
-            ws[f"B{current_row}"] = route.get("date", "")
+            ws[f"B{current_row}"] = route.date
             ws[f"B{current_row}"].alignment = data_alignment_center
             
             # 出発地列（C列）
-            ws[f"C{current_row}"] = route["departure"]
+            ws[f"C{current_row}"] = route.departure
             ws[f"C{current_row}"].alignment = data_alignment_center
             
             # 目的地列（D列）
-            ws[f"D{current_row}"] = route["destination"]
+            ws[f"D{current_row}"] = route.destination
             ws[f"D{current_row}"].alignment = data_alignment_center
             
             # 交通手段列（E列）
-            transport_type = route["transport_type"]
+            transport_type = route.transport_type
             transport_name = transport_map.get(transport_type, transport_type)
             ws[f"E{current_row}"] = transport_name
             ws[f"E{current_row}"].alignment = data_alignment_center
             
             # 費用列（F列）
-            ws[f"F{current_row}"] = f"¥{route['cost']:,.0f}"
+            ws[f"F{current_row}"] = f"¥{route.cost:,.0f}"
             ws[f"F{current_row}"].alignment = data_alignment_right
             
             current_row += 1
@@ -394,6 +385,17 @@ def travel_excel_generator(
             "message": f"申請書を正常に作成しました: {file_path}"
         }
     
+    except ValidationError as e:
+        error_messages = []
+        for error in e.errors():
+            field = ".".join(str(loc) for loc in error["loc"])
+            error_messages.append(f"{field}: {error['msg']}")
+        return {
+            "success": False,
+            "file_path": "",
+            "total_cost": 0,
+            "message": f"バリデーションエラー: {', '.join(error_messages)}"
+        }
     except Exception as e:
         return {
             "success": False,
