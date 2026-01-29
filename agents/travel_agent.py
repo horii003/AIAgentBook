@@ -5,6 +5,7 @@ from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from tools.fare_tools import load_fare_data, calculate_fare
 from tools.excel_generator import travel_excel_generator
+from session.session_manager import SessionManagerFactory
 
 def _get_travel_system_prompt() -> str:
     """現在日付を含むシステムプロンプトを動的に生成"""
@@ -98,17 +99,21 @@ def _get_travel_system_prompt() -> str:
 """
 # グローバル変数
 travel_agent_instance = None
+_session_manager = None
 
 #エージェントの初期化
-def _get_travel_agent() -> Agent:
+def _get_travel_agent(session_id: str = None) -> Agent:
     """
     交通費精算申請エージェントのインスタンスを取得（シングルトンパターン）
+    
+    Args:
+        session_id: セッションID（省略時はセッション管理なし）
     
     Returns:
         Agent: 交通費精算申請エージェントのインスタンス
     """
 
-    global travel_agent_instance
+    global travel_agent_instance, _session_manager
     
     if travel_agent_instance is None:
         # 運賃データの事前読み込み
@@ -116,6 +121,10 @@ def _get_travel_agent() -> Agent:
             load_fare_data()
         except Exception as e:
             raise RuntimeError(f"運賃データの読み込みに失敗しました: {e}")
+        
+        # セッションマネージャーの作成（session_idが指定されている場合）
+        if session_id:
+            _session_manager = SessionManagerFactory.create_session_manager(session_id)
         
         # エージェントの初期化
         travel_agent_instance = Agent(
@@ -138,7 +147,8 @@ def _get_travel_agent() -> Agent:
                 max_attempts=6,
                 initial_delay=4,
                 max_delay=240
-            )
+            ),
+            session_manager=_session_manager  # セッションマネージャーを設定
         )
     
     return travel_agent_instance
@@ -160,8 +170,13 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
     """
 
     try:
+        # invocation_stateからsession_idを取得
+        session_id = None
+        if tool_context and tool_context.invocation_state:
+            session_id = tool_context.invocation_state.get("session_id")
+        
         # エージェントインスタンスを取得（初回は初期化、2回目以降は既存インスタンスを使用する）
-        agent = _get_travel_agent()
+        agent = _get_travel_agent(session_id=session_id)
         
         # invocation_stateから申請者名を取得
         applicant_name = None
@@ -190,6 +205,7 @@ def reset_travel_agent():
     
     ユーザーから会話をリセットしたい要望があった場合は、会話履歴をクリアする。
     """
-    global travel_agent_instance
+    global travel_agent_instance, _session_manager
     travel_agent_instance = None
+    _session_manager = None
 

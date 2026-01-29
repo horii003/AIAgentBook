@@ -13,6 +13,7 @@ from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from agents.travel_agent import travel_agent, reset_travel_agent
 from agents.receipt_expense_agent import receipt_expense_agent, reset_receipt_expense_agent
+from session.session_manager import SessionManagerFactory
 
 # システムプロンプト
 RECEPTION_SYSTEM_PROMPT = """あなたは申請受付窓口エージェントです。
@@ -46,27 +47,11 @@ RECEPTION_SYSTEM_PROMPT = """あなたは申請受付窓口エージェントで
 class ReceptionAgent:
     # 初期化
     def __init__(self):
-        self.agent = Agent(
-            model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
-            system_prompt=RECEPTION_SYSTEM_PROMPT,
-            tools=[travel_agent, receipt_expense_agent],
-            conversation_manager=SlidingWindowConversationManager(
-                window_size=30,  # オーケストレーターは複数エージェントとのやり取りを保持するため大きめ
-                should_truncate_results=True,
-                per_turn=False
-            ),
-            agent_id="reception_agent",
-            name="申請受付窓口エージェント",
-            description="ユーザーからの申請内容を受け付け、適切な専門エージェントに振り分けます",
-            callback_handler=None,  # ストリーミング出力を無効化
-            retry_strategy=ModelRetryStrategy(
-                max_attempts=6,
-                initial_delay=4,
-                max_delay=240
-            )
-        )
         self._applicant_initialized = False
         self._applicant_name = None  # 申請者名を保持
+        self._session_id = None  # セッションIDを保持
+        self._session_manager = None  # セッションマネージャーを保持
+        self.agent = None  # エージェントは後で初期化
 
 
     def _initialize_applicant_info(self):
@@ -87,9 +72,39 @@ class ReceptionAgent:
         
         # インスタンス変数に保存
         self._applicant_name = applicant_name
+        
+        # セッションIDを申請者名から生成（実際の運用では、より適切なID生成方法を使用）
+        self._session_id = f"user_{applicant_name.replace(' ', '_')}"
+        
+        # セッションマネージャーの作成
+        self._session_manager = SessionManagerFactory.create_session_manager(self._session_id)
+        
+        # エージェントの初期化（セッションマネージャー付き）
+        self.agent = Agent(
+            model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            system_prompt=RECEPTION_SYSTEM_PROMPT,
+            tools=[travel_agent, receipt_expense_agent],
+            conversation_manager=SlidingWindowConversationManager(
+                window_size=30,  # オーケストレーターは複数エージェントとのやり取りを保持するため大きめ
+                should_truncate_results=True,
+                per_turn=False
+            ),
+            agent_id="reception_agent",
+            name="申請受付窓口エージェント",
+            description="ユーザーからの申請内容を受け付け、適切な専門エージェントに振り分けます",
+            callback_handler=None,  # ストリーミング出力を無効化
+            retry_strategy=ModelRetryStrategy(
+                max_attempts=6,
+                initial_delay=4,
+                max_delay=240
+            ),
+            session_manager=self._session_manager  # セッションマネージャーを設定
+        )
+        
         self._applicant_initialized = True
         
         print(f"\n申請者情報を登録しました: {applicant_name}")
+        print(f"セッションID: {self._session_id}")
         print("=" * 60)
 
     # 実行
@@ -123,6 +138,9 @@ class ReceptionAgent:
                     reset_receipt_expense_agent()
                     self._applicant_name = None
                     self._applicant_initialized = False
+                    self._session_id = None
+                    self._session_manager = None
+                    self.agent = None
                     print("\nエージェント: 会話履歴と申請者情報をリセットしました。")
                     self._initialize_applicant_info()
                     print("新しい申請を開始できます。")
@@ -133,10 +151,13 @@ class ReceptionAgent:
                     continue
                 
                 # エージェントの実行（専門エージェントツールが自動的に呼び出される）
-                # invocation_stateとして申請者名を渡す
+                # invocation_stateとして申請者名とセッションIDを渡す
                 response = self.agent(
                     user_input, 
-                    invocation_state={"applicant_name": self._applicant_name}
+                    invocation_state={
+                        "applicant_name": self._applicant_name,
+                        "session_id": self._session_id
+                    }
                 )
                 print(f"\nエージェント: {response}")
                 

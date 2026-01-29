@@ -5,6 +5,7 @@ from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_tools import image_reader
 from tools.excel_generator import receipt_excel_generator
+from session.session_manager import SessionManagerFactory
 
 
 def _get_receipt_expense_system_prompt() -> str:
@@ -85,17 +86,25 @@ def _get_receipt_expense_system_prompt() -> str:
 
 # グローバル変数
 receipt_expense_agent_instance = None
+_session_manager = None
 
-def _get_receipt_expense_agent() -> Agent:
+def _get_receipt_expense_agent(session_id: str = None) -> Agent:
     """
     経費精算申請エージェントのインスタンスを取得（シングルトンパターン）
+    
+    Args:
+        session_id: セッションID（省略時はセッション管理なし）
     
     Returns:
         Agent: 経費精算申請エージェントのインスタンス
     """
-    global receipt_expense_agent_instance
+    global receipt_expense_agent_instance, _session_manager
     
     if receipt_expense_agent_instance is None:
+        # セッションマネージャーの作成（session_idが指定されている場合）
+        if session_id:
+            _session_manager = SessionManagerFactory.create_session_manager(session_id)
+        
         # エージェントの初期化
         receipt_expense_agent_instance = Agent(
             model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -117,7 +126,8 @@ def _get_receipt_expense_agent() -> Agent:
                 max_attempts=6,
                 initial_delay=4,
                 max_delay=240
-            )
+            ),
+            session_manager=_session_manager  # セッションマネージャーを設定
         )
     
     return receipt_expense_agent_instance
@@ -140,8 +150,13 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
 
 
     try:
+        # invocation_stateからsession_idを取得
+        session_id = None
+        if tool_context and tool_context.invocation_state:
+            session_id = tool_context.invocation_state.get("session_id")
+        
         # エージェントインスタンスを取得（初回は初期化、2回目以降は既存インスタンスを使用）
-        agent = _get_receipt_expense_agent()
+        agent = _get_receipt_expense_agent(session_id=session_id)
         
         # invocation_stateから申請者名を取得
         applicant_name = None
@@ -169,6 +184,7 @@ def reset_receipt_expense_agent():
     
     新しい申請を開始する際に呼び出すことで、会話履歴をクリアする。
     """
-    global receipt_expense_agent_instance
+    global receipt_expense_agent_instance, _session_manager
     receipt_expense_agent_instance = None
+    _session_manager = None
 
