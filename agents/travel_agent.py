@@ -6,6 +6,7 @@ from strands.agent.conversation_manager import SlidingWindowConversationManager
 from tools.fare_tools import load_fare_data, calculate_fare
 from tools.excel_generator import travel_excel_generator
 from session.session_manager import SessionManagerFactory
+from handlers.human_approval_hook import HumanApprovalHook
 
 def _get_travel_system_prompt() -> str:
     """現在日付を含むシステムプロンプトを動的に生成"""
@@ -72,13 +73,15 @@ def _get_travel_system_prompt() -> str:
    - 日付が {three_months_ago.strftime('%Y-%m-%d')} 以降か確認
    - 5,000円超の場合は上長承認を確認
    - 業務目的を確認
-6. すべての区間の入力完了後、最終確認
+6. すべての区間の入力完了後、申請内容をまとめて表示
 7. **交通費申請ルールに基づいてチェック**：
    - 申請全体についてチェックする
    - 合計金額が5,000円超の場合は上長承認を確認
    - 業務目的を確認
 8. 必要に応じて修正を受け付ける
-9. travel_excel_generatorツールで申請書を生成・保存
+9. **重要**: すべての情報が揃い、ルールチェックが完了したら、**ユーザーに最終確認を求めずに**直接travel_excel_generatorツールを実行してください
+   - システムが自動的に承認プロセスを実行します
+   - 修正が必要な場合は、システムから指示があります
 
 ## 重要な注意事項
 - 必ず一区間ずつ処理してください
@@ -86,14 +89,13 @@ def _get_travel_system_prompt() -> str:
 - 交通手段は「train」「bus」「taxi」「airplane」のいずれかです
 - 可能な限り、calculate_fareツールで交通費を計算してください
 - 計算結果は必ずユーザーに確認してください
-- すべての区間の入力が完了したら、最終確認を行ってください
+- すべての区間の入力が完了し、ルールチェックも完了したら、**ユーザーに「よろしいですか？」などの最終確認を求めずに**、直接travel_excel_generatorツールを実行してください
   
 ## travel_excel_generatorツールの使用方法:
 - routesパラメータ: 収集した全経路データのリスト（必須）
 - 申請者名は自動的に取得されます（引数として渡す必要はありません）
-- ツールは1回だけ呼び出してください
 - エラーが発生した場合は、ツールの戻り値のmessageフィールドを確認してください
-- successフィールドがtrueの場合のみ成功です
+- ツールの実行結果に「キャンセルしました」というメッセージが含まれている場合は、ユーザーの指示に従ってください
 
 常に丁寧で分かりやすい日本語で対話してください。
 """
@@ -126,6 +128,9 @@ def _get_travel_agent(session_id: str = None) -> Agent:
         if session_id:
             _session_manager = SessionManagerFactory.create_session_manager(session_id)
         
+        # Human-in-the-Loop承認フックの作成
+        approval_hook = HumanApprovalHook()
+        
         # エージェントの初期化
         travel_agent_instance = Agent(
             model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -148,7 +153,8 @@ def _get_travel_agent(session_id: str = None) -> Agent:
                 initial_delay=4,
                 max_delay=240
             ),
-            session_manager=_session_manager  # セッションマネージャーを設定
+            session_manager=_session_manager,  # セッションマネージャーを設定
+            hooks=[approval_hook]  # Human-in-the-Loop承認フックを追加
         )
     
     return travel_agent_instance
