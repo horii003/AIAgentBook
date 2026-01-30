@@ -6,6 +6,7 @@ from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_tools import image_reader
 from tools.excel_generator import receipt_excel_generator
 from session.session_manager import SessionManagerFactory
+from handlers.human_approval_hook import HumanApprovalHook
 
 
 def _get_receipt_expense_system_prompt() -> str:
@@ -72,14 +73,20 @@ def _get_receipt_expense_system_prompt() -> str:
    - 5,000円超の場合は上長承認を確認
    - 業務目的を確認
 5. 必要に応じて修正を受け付ける
-6. すべてのルールをクリアした場合のみ、receipt_excel_generatorツールで申請書を生成・保存
+6. **重要**: すべての情報が揃い、ルールチェックが完了したら、**ユーザーに最終確認を求めずに**直接receipt_excel_generatorツールを実行してください
+   - システムが自動的に承認プロセスを実行します
+   - 修正が必要な場合は、システムから指示があります
 
 ## 重要な注意事項
 - 領収書画像のパスは必ず確認してください
 - 抽出した情報は必ずユーザーに確認してください
 - 金額が30,000円を超える場合はエラーを通知してください
+- **重要**: すべての情報が揃い、ルールチェックが完了したら、**ユーザーに「よろしいですか？」などの最終確認を求めずに**、直接receipt_excel_generatorツールを実行してください
+- システムが自動的に承認プロセスを実行します
+- 修正が必要な場合は、システムから指示があります
 - 申請書の生成が完了したら、ファイルパスを明示してください
 - receipt_excel_generatorツールを呼び出す際、applicant_nameパラメータは不要です（自動取得されます）
+- ツールの実行結果に「キャンセルしました」というメッセージが含まれている場合は、ユーザーの指示に従ってください
  
 常に丁寧で分かりやすい日本語で対話してください。
 """
@@ -105,6 +112,9 @@ def _get_receipt_expense_agent(session_id: str = None) -> Agent:
         if session_id:
             _session_manager = SessionManagerFactory.create_session_manager(session_id)
         
+        # Human-in-the-Loop承認フックの作成
+        approval_hook = HumanApprovalHook()
+        
         # エージェントの初期化
         receipt_expense_agent_instance = Agent(
             model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -127,7 +137,8 @@ def _get_receipt_expense_agent(session_id: str = None) -> Agent:
                 initial_delay=4,
                 max_delay=240
             ),
-            session_manager=_session_manager  # セッションマネージャーを設定
+            session_manager=_session_manager,  # セッションマネージャーを設定
+            hooks=[approval_hook]  # Human-in-the-Loop承認フックを追加
         )
     
     return receipt_expense_agent_instance
