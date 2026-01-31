@@ -7,6 +7,7 @@ from strands_tools import image_reader
 from tools.excel_generator import receipt_excel_generator
 from session.session_manager import SessionManagerFactory
 from handlers.human_approval_hook import HumanApprovalHook
+from handlers.loop_control_hook import LoopControlHook
 
 
 def _get_receipt_expense_system_prompt() -> str:
@@ -115,6 +116,12 @@ def _get_receipt_expense_agent(session_id: str = None) -> Agent:
         # Human-in-the-Loop承認フックの作成
         approval_hook = HumanApprovalHook()
         
+        # ループ制御フックの作成
+        loop_control_hook = LoopControlHook(
+            max_iterations=10,  # 専門エージェントは特定タスクに集中するため標準的な回数
+            agent_name="経費精算申請エージェント"
+        )
+        
         # エージェントの初期化
         receipt_expense_agent_instance = Agent(
             model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -138,7 +145,7 @@ def _get_receipt_expense_agent(session_id: str = None) -> Agent:
                 max_delay=240
             ),
             session_manager=_session_manager,  # セッションマネージャーを設定
-            hooks=[approval_hook]  # Human-in-the-Loop承認フックを追加
+            hooks=[approval_hook, loop_control_hook]  # Human-in-the-Loop承認フックとループ制御フックを追加
         )
     
     return receipt_expense_agent_instance
@@ -158,7 +165,9 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
     Returns:
         str: エージェントからの応答
     """
-
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("[receipt_expense_agent] ツールが呼び出されました")
 
     try:
         # invocation_stateからsession_idを取得
@@ -191,8 +200,23 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
         
         return str(response)
     
+    except RuntimeError as e:
+        # ループ制限エラーの処理
+        if "エージェントループの制限" in str(e):
+            return (
+                "申し訳ございません。処理が複雑すぎて完了できませんでした。\n\n"
+                "以下のいずれかをお試しください：\n"
+                "1. 領収書を1枚ずつ申請してください\n"
+                "2. より具体的な情報を提供してください\n"
+                "3. 不要な情報を削除してください\n\n"
+                "受付窓口に戻りますので、もう一度シンプルな内容でお試しください。"
+            )
+        else:
+            return f"エラーが発生しました。受付窓口に戻ります。"
+    
     except Exception as e:
-        return f"エラーが発生しました: {e}"
+        logger.error(f"[receipt_expense_agent] エラーが発生しました: {e}")
+        return f"エラーが発生しました。受付窓口に戻ります。"
 
 
 def reset_receipt_expense_agent():

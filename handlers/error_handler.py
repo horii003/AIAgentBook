@@ -182,7 +182,7 @@ dataフォルダに以下のファイルが存在することを確認してく�
 """
         return user_message.strip()
     
-    def log_error(self, error_type: str, message: str, context: Optional[dict] = None):
+    def log_error(self, error_type: str, message: str, context: Optional[dict] = None, exc_info: bool = False):
         """
         エラーをログに記録
         
@@ -190,6 +190,7 @@ dataフォルダに以下のファイルが存在することを確認してく�
             error_type: エラータイプ
             message: エラーメッセージ
             context: エラーコンテキスト
+            exc_info: スタックトレースをログに含めるか（デフォルト: False）
         """
         log_entry = {
             "timestamp": datetime.now().isoformat(),
@@ -198,7 +199,39 @@ dataフォルダに以下のファイルが存在することを確認してく�
             "context": context or {}
         }
         
-        self.logger.error(f"{error_type}: {message} | Context: {context}")
+        if exc_info:
+            self.logger.error(f"{error_type}: {message} | Context: {context}", exc_info=True)
+        else:
+            self.logger.error(f"{error_type}: {message} | Context: {context}")
+    
+    def handle_loop_limit_error(self, error: Exception, context: Optional[dict] = None) -> str:
+        """
+        エージェントループ制限エラーの処理
+        
+        Args:
+            error: エラーオブジェクト
+            context: エラーコンテキスト
+        
+        Returns:
+            str: ユーザー向けエラーメッセージ
+        """
+        error_message = f"エージェントループの制限に到達しました: {str(error)}"
+        self.log_error("LoopLimitError", error_message, context)
+        
+        user_message = """
+申し訳ございません。処理が複雑すぎて完了できませんでした。
+
+以下のいずれかをお試しください：
+1. タスクをより小さな単位に分割してください
+   例：複数の申請を一度に行う場合は、1つずつ申請してください
+2. より具体的な指示を提供してください
+   例：「交通費を申請したい」→「2024年1月10日の東京から大阪への新幹線代を申請したい」
+3. 不要な情報を削除してください
+   例：申請に関係のない質問や情報は別途お尋ねください
+
+もう一度、シンプルな内容でお試しください。
+"""
+        return user_message.strip()
     
     def log_info(self, message: str):
         """
