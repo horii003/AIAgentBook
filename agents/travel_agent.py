@@ -7,6 +7,7 @@ from tools.fare_tools import load_fare_data, calculate_fare
 from tools.excel_generator import travel_excel_generator
 from session.session_manager import SessionManagerFactory
 from handlers.human_approval_hook import HumanApprovalHook
+from handlers.loop_control_hook import LoopControlHook
 
 def _get_travel_system_prompt() -> str:
     """現在日付を含むシステムプロンプトを動的に生成"""
@@ -131,6 +132,12 @@ def _get_travel_agent(session_id: str = None) -> Agent:
         # Human-in-the-Loop承認フックの作成
         approval_hook = HumanApprovalHook()
         
+        # ループ制御フックの作成
+        loop_control_hook = LoopControlHook(
+            max_iterations=10,  # 専門エージェントは特定タスクに集中するため標準的な回数
+            agent_name="交通費精算申請エージェント"
+        )
+        
         # エージェントの初期化
         travel_agent_instance = Agent(
             model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -154,7 +161,7 @@ def _get_travel_agent(session_id: str = None) -> Agent:
                 max_delay=240
             ),
             session_manager=_session_manager,  # セッションマネージャーを設定
-            hooks=[approval_hook]  # Human-in-the-Loop承認フックを追加
+            hooks=[approval_hook, loop_control_hook]  # Human-in-the-Loop承認フックとループ制御フックを追加
         )
     
     return travel_agent_instance
@@ -174,6 +181,9 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
     Returns:
         str: エージェントからの応答
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("[travel_agent] ツールが呼び出されました")
 
     try:
         # invocation_stateからsession_idを取得
@@ -206,8 +216,27 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
         
         return str(response)
     
+    except RuntimeError as e:
+        # ループ制限エラーの処理
+        if "エージェントループの制限" in str(e):
+            # ログ記録なし（詳細はloop_control_hookで記録済み）
+            error_msg = (
+                "申し訳ございません。処理が複雑すぎて完了できませんでした。\n\n"
+                "以下のいずれかをお試しください：\n"
+                "1. 経路を1つずつ申請してください\n"
+                "2. より具体的な情報（日付、出発地、目的地、交通手段）を提供してください\n"
+                "3. 不要な情報を削除してください\n\n"
+                "受付窓口に戻りますので、もう一度シンプルな内容でお試しください。"
+            )
+            logger.info(f"[travel_agent] ループ制限エラーメッセージを返却: {error_msg[:50]}...")
+            return error_msg
+        else:
+            logger.warning(f"[travel_agent] 予期しないRuntimeError: {str(e)[:100]}")
+            return f"エラーが発生しました。受付窓口に戻ります。"
+    
     except Exception as e:
-        return f"エラーが発生しました: {e}"
+        logger.error(f"[travel_agent] エラーが発生しました: {e}")
+        return f"エラーが発生しました。受付窓口に戻ります。"
 
 
 #エージェントのリセット
