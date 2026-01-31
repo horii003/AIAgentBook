@@ -44,6 +44,9 @@ logs/
 output/
 *.xlsx
 
+# セッションデータ（個人情報を含む可能性がある）
+storage/sessions/
+
 # OS
 .DS_Store
 Thumbs.db

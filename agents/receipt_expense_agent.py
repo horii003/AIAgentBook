@@ -169,16 +169,22 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
         # エージェントインスタンスを取得（初回は初期化、2回目以降は既存インスタンスを使用）
         agent = _get_receipt_expense_agent(session_id=session_id)
         
-        # invocation_stateから申請者名を取得
+        # invocation_stateから申請者名と申請日を取得
         applicant_name = None
+        application_date = None
         if tool_context and tool_context.invocation_state:
             applicant_name = tool_context.invocation_state.get("applicant_name")
+            application_date = tool_context.invocation_state.get("application_date")
         
         # エージェント実行（invocation_stateを渡す）
         if applicant_name:
+            invocation_state = {"applicant_name": applicant_name}
+            if application_date:
+                invocation_state["application_date"] = application_date
+            
             response = agent(
                 query, 
-                invocation_state={"applicant_name": applicant_name}
+                invocation_state=invocation_state
             )
         else:
             response = agent(query)

@@ -3,6 +3,7 @@ import pytest
 import os
 import json
 from datetime import datetime
+from unittest.mock import Mock
 from tools.fare_tools import load_fare_data, calculate_fare
 from tools.excel_generator import travel_excel_generator
 
@@ -122,9 +123,13 @@ class TestExcelGeneratorTools:
     
     def test_generate_excel_report(self, sample_routes):
         """Excel申請書の生成テスト"""
+        # モックのtool_contextを作成
+        mock_context = Mock()
+        mock_context.invocation_state = {"applicant_name": "test001"}
+        
         result = travel_excel_generator(
             routes=sample_routes,
-            user_id="test001"
+            tool_context=mock_context
         )
         
         assert result["success"] is True
@@ -138,9 +143,13 @@ class TestExcelGeneratorTools:
     
     def test_generate_excel_empty_routes(self):
         """空の経路データでの申請書生成テスト"""
+        # モックのtool_contextを作成
+        mock_context = Mock()
+        mock_context.invocation_state = {"applicant_name": "test003"}
+        
         result = travel_excel_generator(
             routes=[],
-            user_id="test003"
+            tool_context=mock_context
         )
         
         assert result["success"] is False
@@ -157,9 +166,13 @@ class TestExcelGeneratorTools:
             }
         ]
         
+        # モックのtool_contextを作成
+        mock_context = Mock()
+        mock_context.invocation_state = {"applicant_name": "test005"}
+        
         result = travel_excel_generator(
             routes=invalid_routes,
-            user_id="test005"
+            tool_context=mock_context
         )
         
         assert result["success"] is False
