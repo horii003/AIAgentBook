@@ -130,7 +130,7 @@ class ReceptionAgent:
         while True:
             try:  
                 # ユーザー入力の受付
-                user_input = input("\n\n入力内容(終了時は'quit'):").strip()
+                user_input = input("\n\n相談内容(終了時は'quit'):").strip()
                 
                 # 終了時の処理
                 if user_input.lower() in ["exit", "quit", "終了"]:
