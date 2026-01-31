@@ -8,6 +8,7 @@
 社員が申請ルールや申請方法が分からない方でも正しく申請できることを目的とします。
 """
 
+from datetime import datetime
 from strands import Agent
 from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
@@ -155,11 +156,12 @@ class ReceptionAgent:
                     continue
                 
                 # エージェントの実行（専門エージェントツールが自動的に呼び出される）
-                # invocation_stateとして申請者名とセッションIDを渡す
+                # invocation_stateとして申請者名、申請日、セッションIDを渡す
                 response = self.agent(
                     user_input, 
                     invocation_state={
                         "applicant_name": self._applicant_name,
+                        "application_date": datetime.now().strftime("%Y-%m-%d"),
                         "session_id": self._session_id
                     }
                 )
