@@ -15,8 +15,8 @@ from strands.agent.conversation_manager import SlidingWindowConversationManager
 from agents.travel_agent import travel_agent, reset_travel_agent
 from agents.receipt_expense_agent import receipt_expense_agent, reset_receipt_expense_agent
 from session.session_manager import SessionManagerFactory
+from handlers.loop_control_hook import LoopControlHook
 from prompt.prompt_reception import RECEPTION_SYSTEM_PROMPT
-
 
 class ReceptionAgent:
     # 初期化
@@ -53,6 +53,12 @@ class ReceptionAgent:
         # セッションマネージャーの作成
         self._session_manager = SessionManagerFactory.create_session_manager(self._session_id)
         
+        # ループ制御フックの作成
+        loop_control_hook = LoopControlHook(
+            max_iterations=5,  # オーケストレーターは専門エージェントとのやり取りがあるため多めに設定
+            agent_name="申請受付窓口エージェント"
+        )
+        
         # エージェントの初期化（セッションマネージャー付き）
         self.agent = Agent(
             model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
@@ -72,7 +78,8 @@ class ReceptionAgent:
                 initial_delay=4,
                 max_delay=240
             ),
-            session_manager=self._session_manager  # セッションマネージャーを設定
+            session_manager=self._session_manager,  # セッションマネージャーを設定
+            hooks=[loop_control_hook]  # ループ制御フックを追加
         )
         
         self._applicant_initialized = True
@@ -139,8 +146,25 @@ class ReceptionAgent:
             except KeyboardInterrupt:
                 print("\n\nエージェント: 処理を中断しました。")
                 break
+            except RuntimeError as e:
+                # ループ制限エラーの処理
+                if "エージェントループの制限" in str(e):
+                    # ユーザーには分かりやすいメッセージ
+                    print("\n" + "="*60)
+                    print("【処理が複雑すぎます】")
+                    print("="*60)
+                    print("\n申し訳ございません。処理が複雑すぎて完了できませんでした。")
+                    print("\n以下のいずれかをお試しください：")
+                    print("1. タスクをより小さな単位に分割してください")
+                    print("   例：複数の申請を一度に行う場合は、1つずつ申請してください")
+                    print("2. より具体的な指示を提供してください")
+                    print("   例：「交通費を申請したい」→「1月10日の東京から大阪への新幹線代を申請したい」")
+                    print("3. 不要な情報を削除してください")
+                    print("   例：申請に関係のない質問や情報は別途お尋ねください")
+                    print("\n" + "="*60)
+                    print("もう一度、シンプルな内容でお試しください。")
+                    print("="*60 + "\n")
+                else:
+                    print(f"\nエラーが発生しました。もう一度お試しください。\n")
             except Exception as e:
-                print(f"\nエラーが発生しました: {e}")
-                print("もう一度お試しください。\n")    
-
-
+                print(f"\nエラーが発生しました。もう一度お試しください。\n")
