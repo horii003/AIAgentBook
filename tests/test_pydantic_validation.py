@@ -2,7 +2,7 @@
 import pytest
 from datetime import datetime
 from pydantic import ValidationError
-from models.data_models import RouteData, RouteInput, ExpenseReport, FareData, TrainFareRoute
+from models.data_models import RouteData, RouteInput, ExpenseReport, FareData, TrainFareRoute, InvocationState
 
 
 class TestRouteDataValidation:
@@ -353,3 +353,146 @@ class TestTypeCoercion:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+
+class TestInvocationStateValidation:
+    """InvocationStateモデルのバリデーションテスト"""
+    
+    def test_valid_invocation_state(self):
+        """正常なinvocation_stateの検証"""
+        state = InvocationState(
+            applicant_name="田中太郎",
+            application_date="2025-01-15",
+            session_id="abc123"
+        )
+        assert state.applicant_name == "田中太郎"
+        assert state.application_date == "2025-01-15"
+        assert state.session_id == "abc123"
+        print("✅ 正常なinvocation_stateは問題なく作成できる")
+    
+    def test_valid_invocation_state_without_session_id(self):
+        """session_idなしの正常なinvocation_stateの検証"""
+        state = InvocationState(
+            applicant_name="田中太郎",
+            application_date="2025-01-15"
+        )
+        assert state.applicant_name == "田中太郎"
+        assert state.application_date == "2025-01-15"
+        assert state.session_id is None
+        print("✅ session_idなしでも作成できる")
+    
+    def test_empty_applicant_name(self):
+        """空の申請者名の検証"""
+        with pytest.raises(ValidationError) as exc_info:
+            InvocationState(
+                applicant_name="",  # 空文字列は許可されない
+                application_date="2025-01-15"
+            )
+        
+        error = exc_info.value.errors()[0]
+        assert "applicant_name" in str(error["loc"])
+        print(f"✅ 空の申請者名を検出: {error['msg']}")
+    
+    def test_invalid_date_format(self):
+        """無効な日付形式の検証"""
+        with pytest.raises(ValidationError) as exc_info:
+            InvocationState(
+                applicant_name="田中太郎",
+                application_date="2025/01/15"  # スラッシュ区切りは無効
+            )
+        
+        error = exc_info.value.errors()[0]
+        assert "application_date" in str(error["loc"])
+        assert "YYYY-MM-DD" in str(error["msg"])
+        print(f"✅ 無効な日付形式を検出: {error['msg']}")
+    
+    def test_invalid_date_value(self):
+        """無効な日付値の検証"""
+        with pytest.raises(ValidationError) as exc_info:
+            InvocationState(
+                applicant_name="田中太郎",
+                application_date="2025-13-45"  # 存在しない日付
+            )
+        
+        error = exc_info.value.errors()[0]
+        assert "application_date" in str(error["loc"])
+        print(f"✅ 無効な日付値を検出: {error['msg']}")
+    
+    def test_missing_required_field(self):
+        """必須フィールドの欠落検証"""
+        with pytest.raises(ValidationError) as exc_info:
+            InvocationState(
+                applicant_name="田中太郎"
+                # application_date が欠落
+            )
+        
+        error = exc_info.value.errors()[0]
+        assert "application_date" in str(error["loc"])
+        assert "missing" in error["type"] or "required" in error["type"]
+        print(f"✅ 必須フィールドの欠落を検出: {error['msg']}")
+    
+    def test_wrong_type_applicant_name(self):
+        """申請者名に数値が渡された場合の検証"""
+        with pytest.raises(ValidationError) as exc_info:
+            InvocationState(
+                applicant_name=12345,  # 数値は許可されない
+                application_date="2025-01-15"
+            )
+        
+        error = exc_info.value.errors()[0]
+        assert "applicant_name" in str(error["loc"])
+        print(f"✅ 不正な型（数値）を検出: {error['msg']}")
+    
+    def test_wrong_type_application_date(self):
+        """申請日に数値が渡された場合の検証"""
+        with pytest.raises(ValidationError) as exc_info:
+            InvocationState(
+                applicant_name="田中太郎",
+                application_date=20250115  # 数値は許可されない
+            )
+        
+        error = exc_info.value.errors()[0]
+        assert "application_date" in str(error["loc"])
+        print(f"✅ 不正な型（数値）を検出: {error['msg']}")
+    
+    def test_list_as_applicant_name(self):
+        """申請者名にリストが渡された場合の検証"""
+        with pytest.raises(ValidationError) as exc_info:
+            InvocationState(
+                applicant_name=["田中", "太郎"],  # リストは許可されない
+                application_date="2025-01-15"
+            )
+        
+        error = exc_info.value.errors()[0]
+        assert "applicant_name" in str(error["loc"])
+        print(f"✅ 不正な型（リスト）を検出: {error['msg']}")
+    
+    def test_dict_as_invocation_state(self):
+        """辞書からInvocationStateへの変換テスト"""
+        data = {
+            "applicant_name": "田中太郎",
+            "application_date": "2025-01-15",
+            "session_id": "abc123"
+        }
+        
+        state = InvocationState(**data)
+        assert state.applicant_name == "田中太郎"
+        assert state.application_date == "2025-01-15"
+        assert state.session_id == "abc123"
+        print("✅ 辞書からの変換が正常に機能")
+    
+    def test_multiple_validation_errors(self):
+        """複数のバリデーションエラーを同時に検出"""
+        with pytest.raises(ValidationError) as exc_info:
+            InvocationState(
+                applicant_name="",  # エラー1: 空の申請者名
+                application_date="2025/01/15"  # エラー2: 無効な日付形式
+            )
+        
+        errors = exc_info.value.errors()
+        assert len(errors) >= 2  # 複数のエラーが検出される
+        
+        print(f"✅ 複数のエラーを同時に検出: {len(errors)}個")
+        for error in errors:
+            print(f"   - {error['loc']}: {error['msg']}")

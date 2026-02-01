@@ -8,6 +8,8 @@ from session.session_manager import SessionManagerFactory
 from handlers.human_approval_hook import HumanApprovalHook
 from prompt.prompt_travel import _get_travel_system_prompt
 from handlers.loop_control_hook import LoopControlHook
+from models.data_models import InvocationState
+from pydantic import ValidationError
 
 
 # グローバル変数
@@ -100,33 +102,31 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
     logger.info("[travel_agent] ツールが呼び出されました")
 
     try:
-        # invocation_stateからsession_idを取得
-        session_id = None
-        if tool_context and tool_context.invocation_state:
-            session_id = tool_context.invocation_state.get("session_id")
+        # invocation_stateのバリデーション
+        if not tool_context or not tool_context.invocation_state:
+            logger.warning("[travel_agent] invocation_stateが存在しません")
+            return "申請者情報が設定されていません。受付窓口に戻ります。"
+        
+        try:
+            state = InvocationState(**tool_context.invocation_state)
+        except ValidationError as e:
+            logger.error(f"[travel_agent] invocation_stateのバリデーションエラー: {e}")
+            error_messages = []
+            for error in e.errors():
+                field = ".".join(str(loc) for loc in error["loc"])
+                error_messages.append(f"{field}: {error['msg']}")
+            return f"申請者情報が不正です: {', '.join(error_messages)}"
         
         # エージェントインスタンスを取得（初回は初期化、2回目以降は既存インスタンスを使用する）
-        agent = _get_travel_agent(session_id=session_id)
+        agent = _get_travel_agent(session_id=state.session_id)
         
-        # invocation_stateから申請者名と申請日を取得
-        applicant_name = None
-        application_date = None
-        if tool_context and tool_context.invocation_state:
-            applicant_name = tool_context.invocation_state.get("applicant_name")
-            application_date = tool_context.invocation_state.get("application_date")
+        # invocation_stateを渡してエージェント実行
+        invocation_state = {
+            "applicant_name": state.applicant_name,
+            "application_date": state.application_date
+        }
         
-        # 通常の実行（invocation_stateを渡す）
-        if applicant_name:
-            invocation_state = {"applicant_name": applicant_name}
-            if application_date:
-                invocation_state["application_date"] = application_date
-            
-            response = agent(
-                query, 
-                invocation_state=invocation_state
-            )
-        else:
-            response = agent(query)
+        response = agent(query, invocation_state=invocation_state)
         
         return str(response)
     

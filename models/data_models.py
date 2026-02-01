@@ -129,3 +129,23 @@ class RouteInput(BaseModel):
         except ValueError:
             raise ValueError(f"日付はYYYY-MM-DD形式である必要があります: {v}")
         return v
+
+
+class InvocationState(BaseModel):
+    """エージェント呼び出し時の状態データ
+    
+    AWS Strandsのinvocation_stateから渡されるデータの型安全性を保証する。
+    """
+    applicant_name: str = Field(..., description="申請者名", min_length=1)
+    application_date: str = Field(..., description="申請日（YYYY-MM-DD形式）")
+    session_id: Optional[str] = Field(None, description="セッションID")
+    
+    @field_validator("application_date")
+    @classmethod
+    def validate_date_format(cls, v: str) -> str:
+        """日付形式の検証"""
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError(f"日付はYYYY-MM-DD形式である必要があります: {v}")
+        return v
