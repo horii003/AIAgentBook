@@ -9,15 +9,14 @@ from session.session_manager import SessionManagerFactory
 from handlers.human_approval_hook import HumanApprovalHook
 from handlers.loop_control_hook import LoopControlHook
 
+
 def _get_travel_system_prompt() -> str:
 
     """現在日付を含むシステムプロンプトを動的に生成"""
     today = datetime.now()
     three_months_ago = today - timedelta(days=90)
 
-
     return f"""
-    
     あなたは交通費精算申請エージェントです。
     ユーザーから移動情報を一区間ずつ収集し、交通費を計算して申請書を作成します。
 
@@ -29,10 +28,10 @@ def _get_travel_system_prompt() -> str:
 
     ## 役割
     1. 交通費の算出処理
-    calculate_fareツールで交通費を計算
+    - calculate_fareツールで交通費を計算
 
     2. Excel申請書の生成
-    travel_excel_generatorツールで申請書を生成
+    - travel_excel_generatorツールで申請書を生成
 
 
     ## 交通費申請ルール（必須チェック項目）
@@ -46,35 +45,27 @@ def _get_travel_system_prompt() -> str:
     * 日付チェックは問題ありません（次のステップに進んでください）
 
     2. 金額チェック
-    - 50,00円を超える申請の場合：
-    * 必ず事前に上長の承認を得ているか確認してください
-    * ユーザーに会話の深堀は不要です。承認の有無だけ確認してください。
+    - 10,000円を超える申請の場合は、必ず事前に上長の承認を得ているか確認してください
+    * ユーザーに詳細の確認は不要です。承認の有無だけ確認してください
     * 承認を得ていない場合は、先に上長の承認を取得するよう案内してください
     
-
     ## 処理フロー
-    1. ユーザーから一区間の移動情報（出発地、目的地、日付、交通手段）を収集
-    2. calculate_fareツールで交通費を計算
-    3. 計算結果をユーザーに確認
-    4. 次の区間の有無を確認
-    5. 交通費申請ルールに基づいてチェック
-    6. すべての区間の入力完了後、申請内容をまとめて表示してユーザーに最終確認をしてください。
-    7. ユーザーから修正要望があれば、区間を確認して、修正を受け付けて再度交通費を計算してください。
-    9. すべての情報が揃い、ルールチェックが完了したら、travel_excel_generatorツールを実行してください
+    1. ユーザーから一区間の移動情報（出発地、目的地、日付、交通手段）を収集する
+    2. calculate_fareツールで交通費を計算する
+    3. 区間ごとに「交通費申請ルール」に基づいてチェックする
+    3. 計算結果をユーザーに確認する
+    4. 次の区間の有無を必ず確認して、ある場合は次の区間も計算をする
+    5. すべての区間の入力完了後、申請内容をまとめて表示してユーザーに申請内容の最終確認する
+       また、ユーザーから修正要望がある場合は再計算する
+    6. 一度だけ確認が終わったら、すぐにtravel_excel_generatorツールを実行する
 
     ## 重要な注意事項
-    - 必ず一区間ずつ処理してください
     - 各区間の情報を収集する際は、出発地、目的地、日付、交通手段のすべてを確認してください
-    - 交通手段は「train」「bus」「taxi」「airplane」のいずれかです
+    - 交通手段は「電車」「バス」「タクシー」「飛行機」のいずれかです
     - 可能な限り、calculate_fareツールで交通費を計算してください
+    - 必ず一区間ずつ処理してください。
+    - 必ず「交通費申請ルール」のチェックをすべて行ってください。
     - 計算結果は必ずユーザーに確認してください
-
-   
-    ## travel_excel_generatorツールの使用方法
-    - routesパラメータ: 収集した全経路データのリスト（必須）
-    - 申請者名は自動的に取得されます（引数として渡す必要はありません）
-    - エラーが発生した場合は、ツールの戻り値のmessageフィールドを確認してください
-    - ツールの実行結果に「キャンセルしました」というメッセージが含まれている場合は、ユーザーの指示に従ってください
 
     常に丁寧で分かりやすい日本語で対話してください。
     """
@@ -87,7 +78,8 @@ _session_manager = None
 #エージェントの初期化
 def _get_travel_agent(session_id: str = None) -> Agent:
     """
-    交通費精算申請エージェントのインスタンスを取得（シングルトンパターン）
+    交通費精算申請エージェントのインスタンスを取得
+    （シングルトンパターン）
     
     Args:
         session_id: セッションID（省略時はセッション管理なし）
@@ -95,7 +87,6 @@ def _get_travel_agent(session_id: str = None) -> Agent:
     Returns:
         Agent: 交通費精算申請エージェントのインスタンス
     """
-
     global travel_agent_instance, _session_manager
     
     if travel_agent_instance is None:
@@ -105,9 +96,12 @@ def _get_travel_agent(session_id: str = None) -> Agent:
         except Exception as e:
             raise RuntimeError(f"運賃データの読み込みに失敗しました: {e}")
         
-        # セッションマネージャーの作成（session_idが指定されている場合）
+        # セッションマネージャーの作成
+        # （session_idが指定されている場合）
         if session_id:
-            _session_manager = SessionManagerFactory.create_session_manager(session_id)
+            _session_manager = (
+                SessionManagerFactory.create_session_manager(session_id)
+            )
         
         # Human-in-the-Loop承認フックの作成
         approval_hook = HumanApprovalHook()
@@ -127,7 +121,7 @@ def _get_travel_agent(session_id: str = None) -> Agent:
                 travel_excel_generator
             ],
             conversation_manager=SlidingWindowConversationManager(
-                window_size=20,  # 複数区間の情報を保持する必要があるため中程度
+                window_size=20,
                 should_truncate_results=True,
                 per_turn=False
             ),
