@@ -16,7 +16,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Font, Alignment, PatternFill
 from pydantic import ValidationError
 from handlers.approval_rules import ApprovalRuleEngine
-from models.data_models import RouteInput
+from models.data_models import RouteInput, InvocationState
 
 
 #共通ヘルパー関数
@@ -30,10 +30,18 @@ def _get_applicant_name(tool_context: ToolContext) -> str:
         
     Returns:
         str: 申請者名（取得できない場合は"未設定"）
+        
+    Raises:
+        ValidationError: invocation_stateのバリデーションエラー
     """
     if not tool_context or not tool_context.invocation_state:
         return "未設定"
-    return tool_context.invocation_state.get("applicant_name", "未設定")
+    
+    try:
+        state = InvocationState(**tool_context.invocation_state)
+        return state.applicant_name
+    except ValidationError:
+        return "未設定"
 
 
 #申請日取得
@@ -46,16 +54,18 @@ def _get_application_date(tool_context: ToolContext) -> str:
         
     Returns:
         str: 申請日（YYYY-MM-DD形式、取得できない場合は現在日付）
+        
+    Raises:
+        ValidationError: invocation_stateのバリデーションエラー
     """
     if not tool_context or not tool_context.invocation_state:
         return datetime.now().strftime("%Y-%m-%d")
     
-    application_date = tool_context.invocation_state.get("application_date")
-    if application_date:
-        return application_date
-    
-    # application_dateが設定されていない場合は現在日付を返す
-    return datetime.now().strftime("%Y-%m-%d")
+    try:
+        state = InvocationState(**tool_context.invocation_state)
+        return state.application_date
+    except ValidationError:
+        return datetime.now().strftime("%Y-%m-%d")
 
 
 #ファイル名生成
