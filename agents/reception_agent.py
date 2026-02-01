@@ -8,6 +8,7 @@
 社員が申請ルールや申請方法が分からない方でも正しく申請できることを目的とします。
 """
 
+import uuid
 from datetime import datetime
 from strands import Agent
 from strands import ModelRetryStrategy
@@ -18,37 +19,37 @@ from session.session_manager import SessionManagerFactory
 from handlers.loop_control_hook import LoopControlHook
 
 # システムプロンプト
-RECEPTION_SYSTEM_PROMPT = """
-あなたは申請受付窓口エージェントです。
-ユーザーからの申請依頼内容に応じて、専門エージェントである「交通費精算申請エージェント(travel_agent)」と
-「経費精算申請エージェント(receipt_expense_agent)」のどちらか適切なエージェントに業務を引き継いでください。
+RECEPTION_SYSTEM_PROMPT = """あなたは申請受付窓口エージェントです。
+ユーザーからの申請依頼内容に応じて、
+専門エージェントである「交通費精算申請エージェント(travel_agent)」と
+「経費精算申請エージェント(receipt_expense_agent)」のどちらか適切なエージェントに
+業務を引き継いでください。
 
-## 処理フロー
-1. ユーザーから申請内容を収集する
-2. 申請内容を分析して、処理をするのに最も適切な専門エージェントを特定する
-   -「交通費精算申請エージェント(travel_agent)」：顧客訪問や出張などに発生した交通費だけの精算に関するもの
-   - 「経費精算申請エージェント(receipt_expense_agent)」:領収書画像を使った経費精算に関するもの
-3. 各専門エージェントの処理結果を確認：
-   - 申請書が正常に生成された場合：「処理が完了しました」と伝える
-   - 申請がキャンセルされた場合：専門エージェントからのメッセージをそのまま伝える（「完了」とは言わない）
-   - **重要**: 専門エージェントから「申し訳ございません。処理が複雑すぎて完了できませんでした」というメッセージが返ってきた場合：
-     * これはエラーメッセージです
-     * **専門エージェントからのエラーメッセージをそのままユーザーに伝えてください**
-     * **エラーメッセージを伝えた後は、追加の質問や情報収集を一切行わないでください**
+## 処理の流れ
+
+### ステップ1: 申請内容の分類
+ユーザーからの入力を分析して、どの専門エージェントが適切かを判断します：
+- 「交通費」「出張」「移動」「電車」「新幹線」「タクシー」などのキーワード → travel_agent
+- 「経費」「領収書」「購入」「レシート」などのキーワード → receipt_expense_agent
+
+### ステップ2: 専門エージェントへの即座の委譲
+**重要**: 申請内容が判明したら、**すぐに該当する専門エージェントツールを呼び出してください**。
+- 自分で詳細情報を収集しないでください
+- 専門エージェントが詳細情報を収集します
+- **ユーザーの最初の入力をそのまま専門エージェントに問や情報収集を一切行わないでください**
      * **ユーザーからの次の入力を待ってください**
 4. 再度ユーザーに他に申請したい内容はあるか確認する
-5. すべての申請受付を終えたら、処理を終了する
+5. すべての申請受付を終えたら、処理を終了してください。
 
 
-## 役割
+主な責任
  - 申請したい内容を正確に分類すること
  - 適切な専門エージェントにリクエストを振り分けること
  - 複数のエージェントが関与する場合に一貫した回答を確保すること
  - 専門エージェントからの応答を正確にユーザーに伝えること
  - **専門エージェントからのエラーメッセージを検出して、ユーザーに正確に伝えること**
 
-
-## 判断プロトコル
+判断プロトコル
  - 顧客訪問や会議、出張などの移動で発生した交通費用の申請 → 「交通費精算申請エージェント(travel_agent)」
  - 領収書画像を使った経費の申請、物品の購入費用、資格や研修費用、接待などの経費精算 → 「経費精算申請エージェント(receipt_expense_agent)」
 
@@ -85,8 +86,10 @@ class ReceptionAgent:
         # インスタンス変数に保存
         self._applicant_name = applicant_name
         
-        # セッションIDを申請者名から生成（実際の運用では、より適切なID生成方法を使用）
-        self._session_id = f"user_{applicant_name.replace(' ', '_')}"
+        # セッションIDをUUID + タイムスタンプで生成
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]  # UUIDの最初の8文字を使用
+        self._session_id = f"{timestamp}_{unique_id}"
         
         # セッションマネージャーの作成
         self._session_manager = SessionManagerFactory.create_session_manager(self._session_id)
@@ -144,7 +147,7 @@ class ReceptionAgent:
         while True:
             try:  
                 # ユーザー入力の受付
-                user_input = input("\n\n相談内容(終了時は'quit'):").strip()
+                user_input = input("\n\n入力内容(終了時は'quit'):").strip()
                 
                 # 終了時の処理
                 if user_input.lower() in ["exit", "quit", "終了"]:
