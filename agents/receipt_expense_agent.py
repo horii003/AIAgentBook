@@ -12,64 +12,55 @@ from models.data_models import InvocationState
 from pydantic import ValidationError
 
 
-# グローバル変数
-receipt_expense_agent_instance = None
-_session_manager = None
-
-
-def _get_receipt_expense_agent(session_id: str = None) -> Agent:
+def _get_receipt_expense_agent(session_id: str) -> Agent:
     """
-    経費精算申請エージェントのインスタンスを取得（シングルトンパターン）
+    経費精算申請エージェントのインスタンスを作成
     
     Args:
-        session_id: セッションID（省略時はセッション管理なし）
+        session_id: セッションID（必須）
     
     Returns:
         Agent: 経費精算申請エージェントのインスタンス
     """
-    global receipt_expense_agent_instance, _session_manager
+    # セッションマネージャーの作成
+    session_manager = SessionManagerFactory.create_session_manager(session_id)
     
-    if receipt_expense_agent_instance is None:
-        # セッションマネージャーの作成（session_idが指定されている場合）
-        if session_id:
-            _session_manager = SessionManagerFactory.create_session_manager(session_id)
-        
-        # Human-in-the-Loop承認フックの作成
-        approval_hook = HumanApprovalHook()
-        
-        # ループ制御フックの作成
-        loop_control_hook = LoopControlHook(
-            max_iterations=10,  # 専門エージェントは特定タスクに集中するため標準的な回数
-            agent_name="経費精算申請エージェント"
-        )
-        
-        # エージェントの初期化
-        receipt_expense_agent_instance = Agent(
-            model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
-            system_prompt=_get_receipt_expense_system_prompt(),#別モジュールから取得
-            tools=[
-                image_reader,
-                receipt_excel_generator
-            ],
-            conversation_manager=SlidingWindowConversationManager(
-                window_size=15,  # 専門エージェントは特定タスクに集中するため小さめ
-                should_truncate_results=True,
-                per_turn=False
-            ),
-            agent_id="receipt_expense_agent",
-            name="経費精算申請エージェント",
-            description="領収書画像から情報を抽出し、Excel形式の経費精算申請書を自動生成します",
-            callback_handler=None,  # ストリーミング出力を無効化
-            retry_strategy=ModelRetryStrategy(
-                max_attempts=6,
-                initial_delay=4,
-                max_delay=240
-            ),
-            session_manager=_session_manager,  # セッションマネージャーを設定
-            hooks=[approval_hook, loop_control_hook]  # Human-in-the-Loop承認フックとループ制御フックを追加
-        )
+    # Human-in-the-Loop承認フックの作成
+    approval_hook = HumanApprovalHook()
     
-    return receipt_expense_agent_instance
+    # ループ制御フックの作成
+    loop_control_hook = LoopControlHook(
+        max_iterations=10,  # 専門エージェントは特定タスクに集中するため標準的な回数
+        agent_name="経費精算申請エージェント"
+    )
+    
+    # エージェントの初期化
+    agent = Agent(
+        model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        system_prompt=_get_receipt_expense_system_prompt(),#別モジュールから取得
+        tools=[
+            image_reader,
+            receipt_excel_generator
+        ],
+        conversation_manager=SlidingWindowConversationManager(
+            window_size=15,  # 専門エージェントは特定タスクに集中するため小さめ
+            should_truncate_results=True,
+            per_turn=False
+        ),
+        agent_id="receipt_expense_agent",
+        name="経費精算申請エージェント",
+        description="領収書画像から情報を抽出し、Excel形式の経費精算申請書を自動生成します",
+        callback_handler=None,  # ストリーミング出力を無効化
+        retry_strategy=ModelRetryStrategy(
+            max_attempts=6,
+            initial_delay=4,
+            max_delay=240
+        ),
+        session_manager=session_manager,  # セッションマネージャーを設定
+        hooks=[approval_hook, loop_control_hook]  # Human-in-the-Loop承認フックとループ制御フックを追加
+    )
+    
+    return agent
 
 #Agent as Tools
 @tool(context=True)
@@ -106,7 +97,7 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
                 error_messages.append(f"{field}: {error['msg']}")
             return f"申請者情報が不正です: {', '.join(error_messages)}"
         
-        # エージェントインスタンスを取得（初回は初期化、2回目以降は既存インスタンスを使用）
+        # エージェントインスタンスを作成（session_managerが会話履歴を管理）
         agent = _get_receipt_expense_agent(session_id=state.session_id)
         
         # invocation_stateを渡してエージェント実行
@@ -142,9 +133,9 @@ def reset_receipt_expense_agent():
     """
     経費精算申請エージェントの状態をリセット
     
-    新しい申請を開始する際に呼び出すことで、会話履歴をクリアする。
+    注意: session_managerがエージェントインスタンスと会話履歴を管理するため、
+    このリセット関数は互換性のために残していますが、実際には何も行いません。
+    リセットが必要な場合は、reception_agentで新しいsession_idを生成してください。
     """
-    global receipt_expense_agent_instance, _session_manager
-    receipt_expense_agent_instance = None
-    _session_manager = None
+    pass
 

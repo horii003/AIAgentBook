@@ -12,75 +12,62 @@ from models.data_models import InvocationState
 from pydantic import ValidationError
 
 
-# グローバル変数
-travel_agent_instance = None
-_session_manager = None
-
-
 #エージェントの初期化
-def _get_travel_agent(session_id: str = None) -> Agent:
+def _get_travel_agent(session_id: str) -> Agent:
     """
-    交通費精算申請エージェントのインスタンスを取得
-    （シングルトンパターン）
+    交通費精算申請エージェントのインスタンスを作成
     
     Args:
-        session_id: セッションID（省略時はセッション管理なし）
+        session_id: セッションID（必須）
     
     Returns:
         Agent: 交通費精算申請エージェントのインスタンス
     """
-    global travel_agent_instance, _session_manager
+    # 運賃データの事前読み込み
+    try:
+        load_fare_data()
+    except Exception as e:
+        raise RuntimeError(f"運賃データの読み込みに失敗しました: {e}")
     
-    if travel_agent_instance is None:
-        # 運賃データの事前読み込み
-        try:
-            load_fare_data()
-        except Exception as e:
-            raise RuntimeError(f"運賃データの読み込みに失敗しました: {e}")
-        
-        # セッションマネージャーの作成
-        # （session_idが指定されている場合）
-        if session_id:
-            _session_manager = (
-                SessionManagerFactory.create_session_manager(session_id)
-            )
-        
-        # Human-in-the-Loop承認フックの作成
-        approval_hook = HumanApprovalHook()
-        
-        # ループ制御フックの作成
-        loop_control_hook = LoopControlHook(
-            max_iterations=10,  # 専門エージェントは特定タスクに集中するため標準的な回数
-            agent_name="交通費精算申請エージェント"
-        )
-        
-        # エージェントの初期化
-        travel_agent_instance = Agent(
-            model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
-            system_prompt=_get_travel_system_prompt(),#別モジュールから取得
-            tools=[
-                calculate_fare,
-                travel_excel_generator
-            ],
-            conversation_manager=SlidingWindowConversationManager(
-                window_size=20,
-                should_truncate_results=True,
-                per_turn=False
-            ),
-            agent_id="travel_agent",
-            name="交通費精算申請エージェント",
-            description="ユーザーから移動情報を収集し、交通費を計算して申請書を作成します",
-            callback_handler=None,  # ストリーミング出力を無効化
-            retry_strategy=ModelRetryStrategy(
-                max_attempts=6,
-                initial_delay=4,
-                max_delay=240
-            ),
-            session_manager=_session_manager,  # セッションマネージャーを設定
-            hooks=[approval_hook, loop_control_hook]  # Human-in-the-Loop承認フックとループ制御フックを追加
-        )
+    # セッションマネージャーの作成
+    session_manager = SessionManagerFactory.create_session_manager(session_id)
     
-    return travel_agent_instance
+    # Human-in-the-Loop承認フックの作成
+    approval_hook = HumanApprovalHook()
+    
+    # ループ制御フックの作成
+    loop_control_hook = LoopControlHook(
+        max_iterations=10,  # 専門エージェントは特定タスクに集中するため標準的な回数
+        agent_name="交通費精算申請エージェント"
+    )
+    
+    # エージェントの初期化
+    agent = Agent(
+        model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        system_prompt=_get_travel_system_prompt(),#別モジュールから取得
+        tools=[
+            calculate_fare,
+            travel_excel_generator
+        ],
+        conversation_manager=SlidingWindowConversationManager(
+            window_size=20,
+            should_truncate_results=True,
+            per_turn=False
+        ),
+        agent_id="travel_agent",
+        name="交通費精算申請エージェント",
+        description="ユーザーから移動情報を収集し、交通費を計算して申請書を作成します",
+        callback_handler=None,  # ストリーミング出力を無効化
+        retry_strategy=ModelRetryStrategy(
+            max_attempts=6,
+            initial_delay=4,
+            max_delay=240
+        ),
+        session_manager=session_manager,  # セッションマネージャーを設定
+        hooks=[approval_hook, loop_control_hook]  # Human-in-the-Loop承認フックとループ制御フックを追加
+    )
+    
+    return agent
 
 #Agent as Tools
 @tool(context=True)
@@ -117,7 +104,7 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
                 error_messages.append(f"{field}: {error['msg']}")
             return f"申請者情報が不正です: {', '.join(error_messages)}"
         
-        # エージェントインスタンスを取得（初回は初期化、2回目以降は既存インスタンスを使用する）
+        # エージェントインスタンスを作成（session_managerが会話履歴を管理）
         agent = _get_travel_agent(session_id=state.session_id)
         
         # invocation_stateを渡してエージェント実行
@@ -158,9 +145,9 @@ def reset_travel_agent():
     """
     交通費精算申請エージェントの状態をリセット
     
-    ユーザーから会話をリセットしたい要望があった場合は、会話履歴をクリアする。
+    注意: session_managerがエージェントインスタンスと会話履歴を管理するため、
+    このリセット関数は互換性のために残していますが、実際には何も行いません。
+    リセットが必要な場合は、reception_agentで新しいsession_idを生成してください。
     """
-    global travel_agent_instance, _session_manager
-    travel_agent_instance = None
-    _session_manager = None
+    pass
 
