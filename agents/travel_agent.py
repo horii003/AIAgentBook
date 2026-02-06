@@ -139,15 +139,3 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
         logger.error(f"[travel_agent] エラーが発生しました: {e}")
         return f"エラーが発生しました。受付窓口に戻ります。"
 
-
-#エージェントのリセット
-def reset_travel_agent():
-    """
-    交通費精算申請エージェントの状態をリセット
-    
-    注意: session_managerがエージェントインスタンスと会話履歴を管理するため、
-    このリセット関数は互換性のために残していますが、実際には何も行いません。
-    リセットが必要な場合は、reception_agentで新しいsession_idを生成してください。
-    """
-    pass
-

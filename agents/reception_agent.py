@@ -13,8 +13,8 @@ from datetime import datetime
 from strands import Agent
 from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
-from agents.travel_agent import travel_agent, reset_travel_agent
-from agents.receipt_expense_agent import receipt_expense_agent, reset_receipt_expense_agent
+from agents.travel_agent import travel_agent
+from agents.receipt_expense_agent import receipt_expense_agent
 from session.session_manager import SessionManagerFactory
 from handlers.loop_control_hook import LoopControlHook
 from prompt.prompt_reception import RECEPTION_SYSTEM_PROMPT
@@ -118,8 +118,6 @@ class ReceptionAgent:
                 
                 # リセット処理
                 if user_input.lower() in ["reset", "リセット", "最初から"]:
-                    reset_travel_agent()
-                    reset_receipt_expense_agent()
                     self._applicant_name = None
                     self._applicant_initialized = False
                     self._session_id = None
