@@ -10,6 +10,7 @@ from prompt.prompt_receipt import _get_receipt_expense_system_prompt
 from handlers.loop_control_hook import LoopControlHook
 from models.data_models import InvocationState
 from pydantic import ValidationError
+from config.model_config import ModelConfig
 
 
 def _get_receipt_expense_agent(session_id: str) -> Agent:
@@ -36,7 +37,7 @@ def _get_receipt_expense_agent(session_id: str) -> Agent:
     
     # エージェントの初期化
     agent = Agent(
-        model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        model=ModelConfig.get_model(),
         system_prompt=_get_receipt_expense_system_prompt(),#別モジュールから取得
         tools=[
             image_reader,

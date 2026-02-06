@@ -18,6 +18,7 @@ from agents.receipt_expense_agent import receipt_expense_agent
 from session.session_manager import SessionManagerFactory
 from handlers.loop_control_hook import LoopControlHook
 from prompt.prompt_reception import RECEPTION_SYSTEM_PROMPT
+from config.model_config import ModelConfig
 
 class ReceptionAgent:
     # 初期化
@@ -64,7 +65,7 @@ class ReceptionAgent:
         
         # エージェントの初期化（セッションマネージャー付き）
         self.agent = Agent(
-            model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
+            model=ModelConfig.get_model(),
             system_prompt=RECEPTION_SYSTEM_PROMPT, #別モジュールから取得
             tools=[travel_agent, receipt_expense_agent],
             conversation_manager=SlidingWindowConversationManager(

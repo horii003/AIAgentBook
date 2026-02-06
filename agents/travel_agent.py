@@ -10,6 +10,7 @@ from prompt.prompt_travel import _get_travel_system_prompt
 from handlers.loop_control_hook import LoopControlHook
 from models.data_models import InvocationState
 from pydantic import ValidationError
+from config.model_config import ModelConfig
 
 
 #エージェントの初期化
@@ -43,7 +44,7 @@ def _get_travel_agent(session_id: str) -> Agent:
     
     # エージェントの初期化
     agent = Agent(
-        model="jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        model=ModelConfig.get_model(),
         system_prompt=_get_travel_system_prompt(),#別モジュールから取得
         tools=[
             calculate_fare,
