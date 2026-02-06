@@ -19,14 +19,6 @@ class ApprovalRuleEngine:
     # 最大申請金額（円）
     MAX_AMOUNT = 30000
     
-    # 経費区分のガイドライン（LLMがシステムプロンプトで参照）
-    EXPENSE_CATEGORIES = {
-        "事務用品費": "書籍、文房具、オフィス用品、ノート、ペンなど",
-        "宿泊費": "ホテル、宿泊施設など",
-        "資格精算費": "資格試験、受験料、認定費用など",
-        "その他経費": "上記以外の経費"
-    }
-    
     @staticmethod
     def check_amount(amount: float) -> Tuple[bool, str]:
         """
