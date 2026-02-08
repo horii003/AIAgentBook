@@ -4,7 +4,7 @@ import os
 from typing import Dict, List
 from strands import Agent, tool
 from pydantic import ValidationError
-from models.data_models import FareData, TrainFareRoute
+from models.data_models import FareData, TrainFareRoute, FareCalculationInput
 from handlers.error_handler import ErrorHandler
 
 
@@ -70,13 +70,9 @@ def load_fare_data() -> dict:
         with open(fixed_fares_path, "r", encoding="utf-8") as f:
             fixed_data = json.load(f)
         
-        # データ形式の検証（Pydanticモデルを使用）
-        if "routes" not in train_data:
-            raise ValueError("電車運賃データに'routes'キーが存在しません")
-        
-        # Pydanticモデルでバリデーション
+        # Pydanticモデルでバリデーション（データ形式の検証も含む）
         fare_data_model = FareData(
-            train_fares=train_data["routes"],
+            train_fares=train_data.get("routes", []),
             fixed_fares=fixed_data
         )
         
@@ -135,7 +131,7 @@ def calculate_fare(
     Args:
         departure: 出発地
         destination: 目的地
-        transport_type: 交通手段（train/bus/taxi/airplane）
+        transport_type: 交通手段（train/bus/taxi/airplane または 電車/バス/タクシー/飛行機）
         date: 移動日（YYYY-MM-DD形式）
     
     Returns:
@@ -148,47 +144,34 @@ def calculate_fare(
         ValueError: 経路が運賃データに存在しない場合
     """
     
-    # # 駅名から「駅」を削除する正規化処理
-    # def normalize_station_name(name: str) -> str:
-    #     """駅名から「駅」を削除して正規化する"""
-    #     if name.endswith("駅"):
-    #         return name[:-1]
-    #     return name
-    
-    # # 出発地と目的地の駅名を正規化
-    # departure = normalize_station_name(departure)
-    # destination = normalize_station_name(destination)
-    
-    # 日本語→英語の交通手段変換マッピング
-    TRANSPORT_MAPPING = {
-        "電車": "train",
-        "バス": "bus",
-        "タクシー": "taxi",
-        "飛行機": "airplane",
-    }
-    
-    # 交通手段の正規化（日本語→英語変換）
-    normalized_transport = TRANSPORT_MAPPING.get(
-        transport_type, 
-        transport_type.lower()
-    )
-    
-    # 有効な交通手段かチェック
-    valid_transports = ["train", "bus", "taxi", "airplane"]
-    if normalized_transport not in valid_transports:
-        error_msg = f"無効な交通手段です: {transport_type}。有効な値: 電車, バス, タクシー, 飛行機, train, bus, taxi, airplane"
+    # Pydanticモデルで入力をバリデーション
+    try:
+        input_data = FareCalculationInput(
+            departure=departure,
+            destination=destination,
+            transport_type=transport_type,
+            date=date
+        )
+    except ValidationError as e:
+        error_messages = []
+        for error in e.errors():
+            field = ".".join(str(loc) for loc in error["loc"])
+            error_messages.append(f"{field}: {error['msg']}")
+        error_msg = f"入力データが不正です: {', '.join(error_messages)}"
         context = {
-            "transport_type": transport_type,
-            "valid_types_ja": ["電車", "バス", "タクシー", "飛行機"],
-            "valid_types_en": valid_transports,
             "departure": departure,
-            "destination": destination
+            "destination": destination,
+            "transport_type": transport_type,
+            "date": date
         }
         user_message = _error_handler.handle_validation_error(
             ValueError(error_msg),
             context
         )
         raise RuntimeError(user_message)
+    
+    # 正規化された交通手段を使用
+    normalized_transport = input_data.transport_type
     
     # 運賃データの読み込み
     fare_data = load_fare_data()

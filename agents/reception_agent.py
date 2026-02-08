@@ -59,7 +59,7 @@ class ReceptionAgent:
         
         # ループ制御フックの作成
         loop_control_hook = LoopControlHook(
-            max_iterations=5,  # オーケストレーターは専門エージェントとのやり取りがあるため多めに設定
+            max_iterations=10,  # オーケストレーターは専門エージェントとのやり取りがあるため多めに設定
             agent_name="申請受付窓口エージェント"
         )
         
