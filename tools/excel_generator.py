@@ -7,6 +7,7 @@ Excel形式の経費精算申請書を生成する。
 
 """
 
+import os
 from typing import List, Tuple
 from datetime import datetime
 from pathlib import Path
@@ -16,7 +17,12 @@ from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Font, Alignment, PatternFill
 from pydantic import ValidationError
 from handlers.approval_rules import ApprovalRuleEngine
+from handlers.error_handler import ErrorHandler
 from models.data_models import RouteInput, InvocationState
+
+
+# エラーハンドラーの初期化
+_error_handler = ErrorHandler()
 
 
 #共通ヘルパー関数
@@ -30,17 +36,27 @@ def _get_applicant_name(tool_context: ToolContext) -> str:
         
     Returns:
         str: 申請者名（取得できない場合は"未設定"）
-        
-    Raises:
-        ValidationError: invocation_stateのバリデーションエラー
     """
     if not tool_context or not tool_context.invocation_state:
+        _error_handler.log_info(
+            "tool_contextまたはinvocation_stateが存在しません。デフォルト値を使用します。",
+            context={"default_value": "未設定"}
+        )
         return "未設定"
     
     try:
         state = InvocationState(**tool_context.invocation_state)
+        _error_handler.log_info(
+            f"申請者名を取得しました: {state.applicant_name}"
+        )
         return state.applicant_name
-    except ValidationError:
+
+    except ValidationError as e:
+        _error_handler.log_error(
+            "ValidationError",
+            f"申請者名の取得に失敗しました: {str(e)}",
+            context={"invocation_state": tool_context.invocation_state}
+        )
         return "未設定"
 
 
@@ -54,18 +70,30 @@ def _get_application_date(tool_context: ToolContext) -> str:
         
     Returns:
         str: 申請日（YYYY-MM-DD形式、取得できない場合は現在日付）
-        
-    Raises:
-        ValidationError: invocation_stateのバリデーションエラー
     """
+    default_date = datetime.now().strftime("%Y-%m-%d")
+    
     if not tool_context or not tool_context.invocation_state:
-        return datetime.now().strftime("%Y-%m-%d")
+        _error_handler.log_info(
+            "tool_contextまたはinvocation_stateが存在しません。現在日付を使用します。",
+            context={"default_date": default_date}
+        )
+        return default_date
     
     try:
         state = InvocationState(**tool_context.invocation_state)
+        _error_handler.log_info(
+            f"申請日を取得しました: {state.application_date}"
+        )
         return state.application_date
-    except ValidationError:
-        return datetime.now().strftime("%Y-%m-%d")
+
+    except ValidationError as e:
+        _error_handler.log_error(
+            "ValidationError",
+            f"申請日の取得に失敗しました: {str(e)}",
+            context={"invocation_state": tool_context.invocation_state}
+        )
+        return default_date
 
 
 #ファイル名生成
@@ -88,11 +116,34 @@ def _ensure_output_directory() -> Path:
     """
     出力ディレクトリを作成し、そのパスを返す。
     
+    環境変数OUTPUT_DIRECTORYから出力先を取得する。
+    設定されていない場合はデフォルトで"output"を使用する。
+    
     Returns:
-        Path: 出力ディレクトリのパス（output/）
+        Path: 出力ディレクトリのパス
+        
+    Raises:
+        OSError: ディレクトリの作成に失敗した場合
     """
-    output_path = Path("output")
-    output_path.mkdir(parents=True, exist_ok=True)
+    # 環境変数から出力ディレクトリを取得
+    output_dir = os.getenv("OUTPUT_DIRECTORY", "output")
+    output_path = Path(output_dir)
+    
+    try:
+        output_path.mkdir(parents=True, exist_ok=True)
+        _error_handler.log_info(
+            f"出力ディレクトリを確認しました: {output_path}",
+            context={"output_directory": str(output_path)}
+        )
+    except OSError as e:
+        _error_handler.log_error(
+            "DirectoryCreationError",
+            f"出力ディレクトリの作成に失敗しました: {str(e)}",
+            context={"output_directory": str(output_path)},
+            exc_info=True
+        )
+        raise
+    
     return output_path
 
 
@@ -171,7 +222,7 @@ def _apply_title_style(cell, styles: dict) -> None:
     cell.alignment = styles["title_alignment"]
 
 
-def _save_workbook(wb: Workbook, file_path: Path) -> bool:
+def _save_workbook(wb: Workbook, file_path: Path) -> Tuple[bool, str]:
     """
     ワークブックをファイルに保存する。
     
@@ -180,13 +231,39 @@ def _save_workbook(wb: Workbook, file_path: Path) -> bool:
         file_path: 保存先のファイルパス
         
     Returns:
-        bool: 保存成功時True、失敗時False
+        Tuple[bool, str]: (成功フラグ, メッセージ)
+            - 成功時: (True, 成功メッセージ)
+            - 失敗時: (False, ユーザー向けエラーメッセージ)
     """
+    
     try:
         wb.save(file_path)
-        return True
-    except (IOError, PermissionError):
-        return False
+        #成功時のログ出力
+        _error_handler.log_info(
+            f"ファイルを正常に保存しました: {file_path}",
+            context={"file_path": str(file_path)}
+        )
+
+        #引数success,messageを返す
+        return True, f"申請書を正常に作成しました: {file_path}"
+    
+    except (IOError, PermissionError) as e:
+        #失敗時はerror_handlerを利用してエラーハンドリングを行う。
+        user_message = _error_handler.handle_file_save_error(
+            e,
+            context={"file_path": str(file_path)}
+        )
+        #引数success,messageを返す
+        return False, user_message
+    
+    except Exception as e:
+        # 予期しないエラーの場合
+        user_message = _error_handler.handle_file_save_error(
+            e,
+            context={"file_path": str(file_path), "error_type": "unexpected"}
+        )
+        #引数success,messageを返す
+        return False, user_message
 
 
 #専門エージェントによるツール関数
@@ -237,99 +314,146 @@ def receipt_excel_generator(
     Raises:
         ValueError: 金額が30,000円を超える場合
     """
-    # ヘルパー関数を使用して共通処理を実行
-    applicant_name = _get_applicant_name(tool_context)
-    application_date = _get_application_date(tool_context)
-    
-    # 金額チェック
-    approved, message = ApprovalRuleEngine.check_amount(amount)
-    if not approved:
-        raise ValueError(message)
-    
-    # ヘルパー関数でファイル名とパスを生成
-    filename = _generate_filename("経費精算申請書")
-    output_path = _ensure_output_directory()
-    file_path = output_path / filename
-    
-    # ヘルパー関数でワークブックとスタイルを作成
-    wb, ws = _create_workbook("経費精算申請書")
-    styles = _create_style_definitions()
-    
-    # タイトル行
-    ws["A1"] = "経費精算申請書"
-    _apply_title_style(ws["A1"], styles)
-    ws.merge_cells("A1:B1")
-    
-    # 申請情報
-    current_row = 3
-    
-    # 申請者名
-    ws[f"A{current_row}"] = "申請者名"
-    _apply_header_style(ws[f"A{current_row}"], styles)
-    ws[f"B{current_row}"] = applicant_name
-    current_row += 1
-    
-    # 申請日
-    ws[f"A{current_row}"] = "申請日"
-    _apply_header_style(ws[f"A{current_row}"], styles)
-    ws[f"B{current_row}"] = application_date
-    current_row += 1
-    
-    # 空行
-    current_row += 1
-    
-    # 領収書情報
-    ws[f"A{current_row}"] = "店舗名"
-    _apply_header_style(ws[f"A{current_row}"], styles)
-    ws[f"B{current_row}"] = store_name
-    current_row += 1
-    
-    ws[f"A{current_row}"] = "金額"
-    _apply_header_style(ws[f"A{current_row}"], styles)
-    ws[f"B{current_row}"] = f"¥{amount:,.0f}"
-    current_row += 1
-    
-    ws[f"A{current_row}"] = "購入日"
-    _apply_header_style(ws[f"A{current_row}"], styles)
-    ws[f"B{current_row}"] = date
-    current_row += 1
-    
-    ws[f"A{current_row}"] = "経費区分"
-    _apply_header_style(ws[f"A{current_row}"], styles)
-    ws[f"B{current_row}"] = expense_category
-    current_row += 1
-    
-    # 品目リスト
-    ws[f"A{current_row}"] = "品目"
-    _apply_header_style(ws[f"A{current_row}"], styles)
-    ws[f"B{current_row}"] = ", ".join(items)
-    current_row += 1
-    
-    # 空行
-    current_row += 1
-    
-    # 承認状況
-    ws[f"A{current_row}"] = "承認状況"
-    _apply_header_style(ws[f"A{current_row}"], styles)
-    ws[f"B{current_row}"] = "承認待ち"
-    ws[f"B{current_row}"].font = Font(color="008000", bold=True)
-    
-    # 列幅の調整
-    ws.column_dimensions["A"].width = 15
-    ws.column_dimensions["B"].width = 40
-    
-    # ヘルパー関数でファイルを保存
-    if _save_workbook(wb, file_path):
-        return {
-            "success": True,
-            "file_path": str(file_path),
-            "message": f"申請書を正常に作成しました: {file_path}"
+    # ツール呼び出しログ
+    _error_handler.log_info(
+        "receipt_excel_generatorツールが呼び出されました",
+        context={
+            "store_name": store_name,
+            "amount": amount,
+            "date": date,
+            "expense_category": expense_category
         }
-    else:
+    )
+
+    #申請書作成処理開始
+    try:
+        # ヘルパー関数を使用して共通処理を実行
+        applicant_name = _get_applicant_name(tool_context)
+        application_date = _get_application_date(tool_context)
+        
+        # 金額チェック
+        approved, message = ApprovalRuleEngine.check_amount(amount)
+        if not approved:
+            _error_handler.log_error(
+                "AmountValidationError",
+                f"金額チェックに失敗しました: {message}",
+                context={"amount": amount}
+            )
+            return {
+                "success": False,
+                "file_path": "",
+                "message": message
+            }
+        
+        # ヘルパー関数でファイル名とパスを生成
+        filename = _generate_filename("経費精算申請書")
+        output_path = _ensure_output_directory()
+        file_path = output_path / filename
+        
+        _error_handler.log_info(
+            "Excel申請書の生成を開始します",
+            context={"file_path": str(file_path)}
+        )
+        
+        # ヘルパー関数でワークブックとスタイルを作成
+        wb, ws = _create_workbook("経費精算申請書")
+        styles = _create_style_definitions()
+        
+        # タイトル行
+        ws["A1"] = "経費精算申請書"
+        _apply_title_style(ws["A1"], styles)
+        ws.merge_cells("A1:B1")
+        
+        # 申請情報
+        current_row = 3
+        
+        # 申請者名
+        ws[f"A{current_row}"] = "申請者名"
+        _apply_header_style(ws[f"A{current_row}"], styles)
+        ws[f"B{current_row}"] = applicant_name
+        current_row += 1
+        
+        # 申請日
+        ws[f"A{current_row}"] = "申請日"
+        _apply_header_style(ws[f"A{current_row}"], styles)
+        ws[f"B{current_row}"] = application_date
+        current_row += 1
+        
+        # 空行
+        current_row += 1
+        
+        # 領収書情報
+        ws[f"A{current_row}"] = "店舗名"
+        _apply_header_style(ws[f"A{current_row}"], styles)
+        ws[f"B{current_row}"] = store_name
+        current_row += 1
+        
+        ws[f"A{current_row}"] = "金額"
+        _apply_header_style(ws[f"A{current_row}"], styles)
+        ws[f"B{current_row}"] = f"¥{amount:,.0f}"
+        current_row += 1
+        
+        ws[f"A{current_row}"] = "購入日"
+        _apply_header_style(ws[f"A{current_row}"], styles)
+        ws[f"B{current_row}"] = date
+        current_row += 1
+        
+        ws[f"A{current_row}"] = "経費区分"
+        _apply_header_style(ws[f"A{current_row}"], styles)
+        ws[f"B{current_row}"] = expense_category
+        current_row += 1
+        
+        # 品目リスト
+        ws[f"A{current_row}"] = "品目"
+        _apply_header_style(ws[f"A{current_row}"], styles)
+        ws[f"B{current_row}"] = ", ".join(items)
+        current_row += 1
+        
+        # 空行
+        current_row += 1
+        
+        # 承認状況
+        ws[f"A{current_row}"] = "承認状況"
+        _apply_header_style(ws[f"A{current_row}"], styles)
+        ws[f"B{current_row}"] = "承認待ち"
+        ws[f"B{current_row}"].font = Font(color="008000", bold=True)
+        
+        # 列幅の調整
+        ws.column_dimensions["A"].width = 15
+        ws.column_dimensions["B"].width = 40
+        
+        # ヘルパー関数でファイルを保存
+        success, message = _save_workbook(wb, file_path)
+        if success:
+            return {
+                "success": True,
+                "file_path": str(file_path),
+                "message": message
+            }
+        else:
+            return {
+                "success": False,
+                "file_path": "",
+                "message": message
+            }
+    
+
+    #申請書作成処理のエラー（予期しないエラー）
+    except Exception as e:
+        _error_handler.log_error(
+            "UnexpectedError",
+            f"経費精算申請書の生成中に予期しないエラーが発生しました: {str(e)}",
+            context={
+                "store_name": store_name,
+                "amount": amount,
+                "date": date
+            },
+            exc_info=True
+        )
         return {
             "success": False,
             "file_path": "",
-            "message": f"ファイル保存エラー: ファイルの保存に失敗しました"
+            "message": f"エラー: 申請書の生成に失敗しました - {str(e)}"
         }
 
 
@@ -365,14 +489,25 @@ def travel_excel_generator(
             "message": str           # 結果メッセージ
         }
     """
+    # ツール呼び出しログ
+    _error_handler.log_info(
+        "travel_excel_generatorツールが呼び出されました",
+        context={"routes_count": len(routes) if routes else 0}
+    )
     
-    # ヘルパー関数を使用して共通処理を実行
-    applicant_name = _get_applicant_name(tool_context)
-    application_date = _get_application_date(tool_context)
-
+    #申請書作成処理開始
     try:
+        # ヘルパー関数を使用して共通処理を実行
+        applicant_name = _get_applicant_name(tool_context)
+        application_date = _get_application_date(tool_context)
+
         # Pydanticモデルでバリデーション
         if not routes:
+            _error_handler.log_error(
+                "EmptyDataError",
+                "経路データが空です",
+                context={"routes": routes}
+            )
             return {
                 "success": False,
                 "file_path": "",
@@ -386,11 +521,19 @@ def travel_excel_generator(
             try:
                 validated_route = RouteInput(**route)
                 validated_routes.append(validated_route)
+
             except ValidationError as e:
                 error_messages = []
                 for error in e.errors():
                     field = ".".join(str(loc) for loc in error["loc"])
                     error_messages.append(f"{field}: {error['msg']}")
+
+                # handle_validation_errorでログ出力
+                _error_handler.handle_validation_error(
+                    e,
+                    context={"route_index": i+1, "route_data": route}
+                )
+                
                 return {
                     "success": False,
                     "file_path": "",
@@ -401,10 +544,20 @@ def travel_excel_generator(
         # 合計交通費の計算
         total_cost = sum(route.cost for route in validated_routes)
         
+        _error_handler.log_info(
+            f"経路データの検証が完了しました。合計交通費: ¥{total_cost:,.0f}",
+            context={"routes_count": len(validated_routes), "total_cost": total_cost}
+        )
+        
         # ヘルパー関数でファイル名とパスを生成
         filename = _generate_filename("交通費申請書")
         output_path = _ensure_output_directory()
         file_path = output_path / filename
+        
+        _error_handler.log_info(
+            "Excel申請書の生成を開始します",
+            context={"file_path": str(file_path)}
+        )
         
         # ヘルパー関数でワークブックとスタイルを作成
         wb, ws = _create_workbook("交通費申請書")
@@ -514,37 +667,34 @@ def travel_excel_generator(
         ws.column_dimensions["G"].width = 12
         
         # ヘルパー関数でファイルを保存
-        if _save_workbook(wb, file_path):
+        success, message = _save_workbook(wb, file_path)
+        if success:
             return {
                 "success": True,
                 "file_path": str(file_path),
                 "total_cost": total_cost,
-                "message": f"申請書を正常に作成しました: {file_path}"
+                "message": message
             }
         else:
             return {
                 "success": False,
                 "file_path": "",
                 "total_cost": 0,
-                "message": f"ファイル保存エラー: ファイルの保存に失敗しました"
+                "message": message
             }
     
-    except ValidationError as e:
-        error_messages = []
-        for error in e.errors():
-            field = ".".join(str(loc) for loc in error["loc"])
-            error_messages.append(f"{field}: {error['msg']}")
-        return {
-            "success": False,
-            "file_path": "",
-            "total_cost": 0,
-            "message": f"バリデーションエラー: {', '.join(error_messages)}"
-        }
+    #申請書作成処理のエラー（予期しないエラー）
     except Exception as e:
+        _error_handler.log_error(
+            "UnexpectedError",
+            f"交通費申請書の生成中に予期しないエラーが発生しました: {str(e)}",
+            context={"routes_count": len(routes) if routes else 0},
+            exc_info=True
+        )
         return {
             "success": False,
             "file_path": "",
             "total_cost": 0,
-            "message": f"エラー: {str(e)}"
+            "message": f"エラー: 申請書の生成に失敗しました - {str(e)}"
         }
 
