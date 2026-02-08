@@ -1,6 +1,5 @@
 """Pydanticバリデーション機能の具体的なテスト"""
 import pytest
-from datetime import datetime
 from pydantic import ValidationError
 from models.data_models import RouteInput, FareData, TrainFareRoute, InvocationState
 

@@ -1,8 +1,7 @@
 """運賃計算関連のツール"""
 import json
 import os
-from typing import Dict, List
-from strands import Agent, tool
+from strands import tool
 from pydantic import ValidationError
 from models.data_models import FareData, TrainFareRoute, FareCalculationInput
 from handlers.error_handler import ErrorHandler
