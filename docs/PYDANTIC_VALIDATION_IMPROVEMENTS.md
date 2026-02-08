@@ -180,7 +180,39 @@ fare_data_model = FareData(
 )
 ```
 
-### 3. 不要なインポートの削除
+### 3. 未使用モデルの削除
+
+**RouteDataとExpenseReportの削除**
+- これらのモデルは定義されていたが、実際のコードでは使用されていなかった
+- `RouteInput`と重複していた
+- テストでのみ使用されていた
+
+```python
+# 削除されたモデル
+class RouteData(BaseModel):
+    """一区間の経路情報"""
+    date: datetime  # datetime型
+    cost: float = Field(..., ge=0, le=1000000)  # 上限あり
+    # ...
+
+class ExpenseReport(BaseModel):
+    """交通費申請書"""
+    routes: List[RouteData]
+    # to_pdf_content()メソッドを持つが使用されていない
+    # ...
+```
+
+**理由:**
+- `RouteData`は`RouteInput`と重複（日付の型が異なるだけ）
+- `ExpenseReport`はPDF生成用だが、現在はExcel生成のみ実装
+- 実際のコードで使用されていない（テストのみ）
+- コードをシンプルに保つため削除
+
+**影響:**
+- テストファイルを更新（`RouteInput`を使用するように変更）
+- 実際のコードには影響なし
+
+### 4. 不要なインポートの削除
 
 **models/data_models.py**
 - `model_validator`を削除（使用していないため）
@@ -198,24 +230,33 @@ from pydantic import BaseModel, Field, field_validator
 ### 1. コードの簡潔性
 - 冗長なバリデーションコードを削除し、Pydanticの機能を最大限活用
 - 手動バリデーションをPydanticモデルに置き換え、コードの可読性が向上
+- 未使用モデルを削除し、保守すべきコード量を削減（7モデル → 5モデル）
 
 ### 2. 型安全性の向上
 - `FareCalculationInput`モデルにより、運賃計算の入力が型安全に
 - Literal型により、交通手段の有効性がコンパイル時にチェック可能
+- 全てのモデルが実際に使用されており、デッドコードがない
 
 ### 3. エラーメッセージの一貫性
 - Pydanticの統一されたエラーメッセージ形式
 - エラーハンドリングが一元化され、保守性が向上
 
 ### 4. テストの信頼性
-- Pydanticバリデーションのテストが全て通過（30/30）
+- Pydanticバリデーションのテストが全て通過（20/20）
 - バリデーションロジックがモデル定義に集約され、テストが容易に
+- 不要なテストを削除し、テストコードもシンプル化
 
 ## テスト結果
 
 ### 成功したテスト
-- `tests/test_pydantic_validation.py`: 30/30 passed ✅
+- `tests/test_pydantic_validation.py`: 20/20 passed ✅
 - Pydanticモデルのバリデーションが正しく動作することを確認
+- 未使用モデル（RouteData, ExpenseReport）のテストを削除
+
+### 削除されたテスト
+- `TestRouteDataValidation`: RouteDataモデルが削除されたため
+- `TestExpenseReportValidation`: ExpenseReportモデルが削除されたため
+- これらのテストは`RouteInput`を使用するテストに統合または削除
 
 ### 既存の問題（今回の変更とは無関係）
 - `tests/test_real_world_validation.py`: 一部のテストが`user_id`引数の変更により失敗
@@ -244,8 +285,24 @@ from pydantic import BaseModel, Field, field_validator
 
 - ✅ 冗長なバリデーションコードを削除
 - ✅ 手動バリデーションをPydanticモデルに置き換え
+- ✅ 未使用モデル（RouteData, ExpenseReport）を削除
+- ✅ 日付バリデーションを共通関数化
 - ✅ 型安全性の向上
 - ✅ コードの可読性と保守性の向上
-- ✅ 全てのPydanticバリデーションテストが通過
+- ✅ 全てのPydanticバリデーションテストが通過（20/20）
+- ✅ モデル数を29%削減（7個 → 5個）
 
 Pydanticの機能を最大限活用することで、より堅牢で保守しやすいコードベースを実現しました。
+
+### 最終的なモデル構成
+
+**使用されているモデル（5個）:**
+1. `TrainFareRoute` - 電車運賃の経路データ
+2. `FareData` - 運賃データ全体
+3. `RouteInput` - ツール入力用の経路データ
+4. `InvocationState` - エージェント呼び出し時の状態データ
+5. `FareCalculationInput` - 運賃計算ツールの入力データ
+
+**削除されたモデル（2個）:**
+1. `RouteData` - RouteInputと重複、未使用
+2. `ExpenseReport` - PDF生成用だが未実装、未使用
