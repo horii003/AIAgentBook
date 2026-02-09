@@ -56,7 +56,7 @@ class InvocationState(BaseModel):
     """
     applicant_name: str = Field(..., min_length=1, description="申請者名")
     application_date: str = Field(..., description="申請日（YYYY-MM-DD形式）")
-    session_id: str = Field(..., min_length=1, description="セッションID")
+    session_id: Optional[str] = Field(None, description="セッションID")
     
     _validate_date = field_validator("application_date")(validate_date_string)
 
