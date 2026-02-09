@@ -30,6 +30,11 @@ class LoopControlHook(HookProvider):
     2. AfterModelCallEventでループカウントをインクリメント
     3. 最大回数に達した場合はRuntimeErrorを発生させる
     4. エージェントのフロー（状態）を表示
+    
+    Note:
+        全フックイベントはStrandsの_run_loop()内（BeforeInvocationEvent～AfterInvocationEventの間）
+        でのみ発火され、かつ_invocation_lockにより同一インスタンスへの並行呼び出しもブロックされるため、
+        invocation外での発火を防ぐガードは不要です。
     """
     
     def __init__(self, max_iterations: int = 10, agent_name: str = "Agent"):
@@ -43,7 +48,6 @@ class LoopControlHook(HookProvider):
         self.max_iterations = max_iterations
         self.agent_name = agent_name
         self.current_iteration = 0
-        self._invocation_active = False
     
     def register_hooks(self, registry: HookRegistry, **kwargs: Any) -> None:
         """フックの登録"""
@@ -62,7 +66,6 @@ class LoopControlHook(HookProvider):
             event: BeforeInvocationEvent
         """
         self.current_iteration = 0
-        self._invocation_active = True
         logger.info(f"[{self.agent_name}] BeforeInvocationEvent: エージェント呼び出し開始")
         logger.info(f"[{self.agent_name}] 最大ループ回数: {self.max_iterations}")
     
@@ -73,9 +76,6 @@ class LoopControlHook(HookProvider):
         Args:
             event: BeforeModelCallEvent
         """
-        if not self._invocation_active:
-            return
-        
         logger.info(f"[{self.agent_name}] BeforeModelCallEvent: モデル呼び出し #{self.current_iteration + 1}")
     
     def on_after_model_call(self, event: AfterModelCallEvent) -> None:
@@ -85,9 +85,6 @@ class LoopControlHook(HookProvider):
         Args:
             event: AfterModelCallEvent
         """
-        if not self._invocation_active:
-            return
-        
         # 例外が発生している場合はカウントしない（retry処理を避ける）
         if event.exception:
             return
@@ -118,9 +115,6 @@ class LoopControlHook(HookProvider):
         Args:
             event: BeforeToolCallEvent
         """
-        if not self._invocation_active:
-            return
-        
         tool_name = event.tool_use.get("name", "unknown")
         logger.info(f"[{self.agent_name}] BeforeToolCallEvent: ツール呼び出し - {tool_name}")
     
@@ -131,9 +125,6 @@ class LoopControlHook(HookProvider):
         Args:
             event: AfterToolCallEvent
         """
-        if not self._invocation_active:
-            return
-        
         tool_name = event.tool_use.get("name", "unknown")
         logger.info(f"[{self.agent_name}] AfterToolCallEvent: ツール呼び出し完了 - {tool_name}")
     
@@ -144,8 +135,4 @@ class LoopControlHook(HookProvider):
         Args:
             event: AfterInvocationEvent
         """
-        if not self._invocation_active:
-            return
-        
-        self._invocation_active = False
         logger.info(f"[{self.agent_name}] AfterInvocationEvent: エージェント呼び出し終了（合計ループ回数: {self.current_iteration}）")
