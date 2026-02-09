@@ -8,8 +8,6 @@ from session.session_manager import SessionManagerFactory
 from handlers.human_approval_hook import HumanApprovalHook
 from prompt.prompt_travel import _get_travel_system_prompt
 from handlers.loop_control_hook import LoopControlHook
-from models.data_models import InvocationState
-from pydantic import ValidationError
 from config.model_config import ModelConfig
 
 
@@ -90,28 +88,16 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
     logger.info("[travel_agent] ツールが呼び出されました")
 
     try:
-        # invocation_stateのバリデーション
-        if not tool_context or not tool_context.invocation_state:
-            logger.warning("[travel_agent] invocation_stateが存在しません")
-            return "申請者情報が設定されていません。受付窓口に戻ります。"
-        
-        try:
-            state = InvocationState(**tool_context.invocation_state)
-        except ValidationError as e:
-            logger.error(f"[travel_agent] invocation_stateのバリデーションエラー: {e}")
-            error_messages = []
-            for error in e.errors():
-                field = ".".join(str(loc) for loc in error["loc"])
-                error_messages.append(f"{field}: {error['msg']}")
-            return f"申請者情報が不正です: {', '.join(error_messages)}"
+        # invocation_stateは受付エージェント側でバリデーション済み
+        state = tool_context.invocation_state
         
         # エージェントインスタンスを作成（session_managerが会話履歴を管理）
-        agent = _get_travel_agent(session_id=state.session_id)
+        agent = _get_travel_agent(session_id=state["session_id"])
         
         # invocation_stateを渡してエージェント実行
         invocation_state = {
-            "applicant_name": state.applicant_name,
-            "application_date": state.application_date
+            "applicant_name": state["applicant_name"],
+            "application_date": state["application_date"]
         }
         
         response = agent(query, invocation_state=invocation_state)

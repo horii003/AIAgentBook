@@ -19,6 +19,7 @@ from handlers.error_handler import ErrorHandler
 from handlers.loop_control_hook import LoopControlHook
 from prompt.prompt_reception import RECEPTION_SYSTEM_PROMPT
 from config.model_config import ModelConfig
+from models.data_models import InvocationState
 
 class ReceptionAgent:
     # 初期化
@@ -140,15 +141,16 @@ class ReceptionAgent:
                 if not user_input:
                     continue
                 
-                # エージェントの実行（専門エージェントツールが自動的に呼び出される）
-                # invocation_stateとして申請者名、申請日、セッションIDを渡す
+                # invocation_stateをPydanticモデルでバリデーションしてから渡す
+                invocation_state = InvocationState(
+                    applicant_name=self._applicant_name,
+                    application_date=datetime.now().strftime("%Y-%m-%d"),
+                    session_id=self._session_id
+                )
+                
                 response = self.agent(
                     user_input, 
-                    invocation_state={
-                        "applicant_name": self._applicant_name,
-                        "application_date": datetime.now().strftime("%Y-%m-%d"),
-                        "session_id": self._session_id
-                    }
+                    invocation_state=invocation_state.model_dump()
                 )
                 print(f"\nエージェント: {response}")
                 
