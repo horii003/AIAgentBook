@@ -182,8 +182,11 @@ class ErrorHandler:
             str: ユーザー向けエラーメッセージ
         """
         error_message = f"入力データの検証に失敗しました: {str(error)}"
+        
+        #ログ出力
         self.log_error("ValidationError", error_message, context)
         
+        #ユーザー向けメッセージ作成
         user_message = f"""
         入力データに問題があります。
         エラー詳細: {str(error)}
