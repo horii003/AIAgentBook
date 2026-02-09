@@ -14,6 +14,12 @@ def validate_date_string(v: str) -> str:
     return v
 
 
+def normalize_transport_type(v: str) -> str:
+    """交通手段を英語に正規化"""
+    mapping = {"電車": "train", "バス": "bus", "タクシー": "taxi", "飛行機": "airplane"}
+    return mapping.get(v, v.lower())
+
+
 class TrainFareRoute(BaseModel):
     """電車運賃の経路データ"""
     departure: str = Field(..., description="出発地")
@@ -42,11 +48,12 @@ class RouteInput(BaseModel):
     departure: str = Field(..., min_length=1, description="出発地")
     destination: str = Field(..., min_length=1, description="目的地")
     date: str = Field(..., description="日付（YYYY-MM-DD形式）")
-    transport_type: Literal["train", "bus", "taxi", "airplane"] = Field(..., description="交通手段")
+    transport_type: Literal["train", "bus", "taxi", "airplane", "電車", "バス", "タクシー", "飛行機"] = Field(..., description="交通手段")
     cost: float = Field(..., ge=0, description="費用")
     notes: Optional[str] = Field(None, description="備考")
     
     _validate_date = field_validator("date")(validate_date_string)
+    _normalize_transport = field_validator("transport_type")(normalize_transport_type)
 
 
 class InvocationState(BaseModel):
@@ -69,11 +76,5 @@ class FareCalculationInput(BaseModel):
     date: str = Field(..., description="移動日（YYYY-MM-DD形式）")
     
     _validate_date = field_validator("date")(validate_date_string)
-    
-    @field_validator("transport_type")
-    @classmethod
-    def normalize_transport_type(cls, v: str) -> str:
-        """交通手段を英語に正規化"""
-        mapping = {"電車": "train", "バス": "bus", "タクシー": "taxi", "飛行機": "airplane"}
-        return mapping.get(v, v.lower())
+    _normalize_transport = field_validator("transport_type")(normalize_transport_type)
 
