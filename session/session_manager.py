@@ -3,7 +3,9 @@
 FileSessionManagerを使用してエージェントの会話履歴と状態を永続化します。
 """
 import os
+import uuid
 from pathlib import Path
+from datetime import datetime
 from strands.session.file_session_manager import FileSessionManager
 
 
@@ -12,6 +14,37 @@ class SessionManagerFactory:
     
     # セッションの保存先ディレクトリ
     _storage_dir = None
+    
+    @classmethod
+    def generate_session_id(cls, prefix: str = "") -> str:
+        """
+        一意のセッションIDを生成
+        
+        セッションIDはタイムスタンプ（秒単位）とUUID（8文字）の組み合わせで生成されます。
+        これにより、同じ秒に複数のセッションが開始されても衝突を防ぎます。
+        
+        Args:
+            prefix: セッションIDのプレフィックス（オプション）
+                   例: "test", "user_a" など
+        
+        Returns:
+            str: 生成されたセッションID
+                - prefixなし: "YYYYMMDD_HHMMSS_uuid8"
+                - prefixあり: "prefix_YYYYMMDD_HHMMSS_uuid8"
+        
+        Examples:
+            >>> SessionManagerFactory.generate_session_id()
+            "20260209_143022_a1b2c3d4"
+            
+            >>> SessionManagerFactory.generate_session_id("test")
+            "test_20260209_143022_a1b2c3d4"
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = str(uuid.uuid4())[:8]
+        
+        if prefix:
+            return f"{prefix}_{timestamp}_{unique_id}"
+        return f"{timestamp}_{unique_id}"
     
     @classmethod
     def get_storage_dir(cls) -> str:
