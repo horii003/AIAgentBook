@@ -275,7 +275,7 @@ def receipt_excel_generator(
     date: str,
     items: List[str],
     expense_category: str,
-    tool_context
+    tool_context: ToolContext
 ) -> dict:
     """
     経費精算申請エージェントが利用します。経費精算申請書を生成します。
@@ -461,7 +461,7 @@ def receipt_excel_generator(
 @tool(context=True)
 def travel_excel_generator(
     routes: List[dict],
-    tool_context
+    tool_context: ToolContext
 ) -> dict:
 
     """
