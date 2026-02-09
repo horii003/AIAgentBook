@@ -8,7 +8,6 @@
 社員が申請ルールや申請方法が分からない方でも正しく申請できることを目的とします。
 """
 
-import uuid
 from datetime import datetime
 from strands import Agent
 from strands import ModelRetryStrategy
@@ -53,10 +52,8 @@ class ReceptionAgent:
         # インスタンス変数に保存
         self._applicant_name = applicant_name
         
-        # セッションIDをUUID + タイムスタンプで生成
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        unique_id = str(uuid.uuid4())[:8]  # UUIDの最初の8文字を使用
-        self._session_id = f"{timestamp}_{unique_id}"
+        # セッションIDを生成（SessionManagerFactoryの共通メソッドを使用）
+        self._session_id = SessionManagerFactory.generate_session_id()
 
         self._error_handler.log_info("セッションを作成しました")
         
