@@ -315,23 +315,7 @@ class HumanApprovalHook(HookProvider):
         self._log_approval(tool_name, tool_params, approved, feedback)
 ```
 
-### 2. 承認ルールエンジンとの統合
-
-```python
-from handlers.approval_rules import ApprovalRuleEngine
-
-def rule_based_approval(tool_name: str, tool_params: dict) -> tuple:
-    # ルールエンジンで自動判定
-    auto_approved, message = ApprovalRuleEngine.check_approval(tool_params)
-    
-    if auto_approved:
-        return True, ""
-    
-    # ルールで判定できない場合は人間に確認
-    return ask_human_approval(tool_name, tool_params)
-```
-
-### 3. 非同期承認（Webhook、メール通知など）
+### 2. 非同期承認（Webhook、メール通知など）
 
 ```python
 async def async_approval_callback(tool_name: str, tool_params: dict) -> tuple:
