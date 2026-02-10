@@ -12,10 +12,6 @@ class ModelConfig:
     # モデルID
     DEFAULT_MODEL_ID = "jp.anthropic.claude-sonnet-4-5-20250929-v1:0"
     
-    # モデルパラメータ
-    #DEFAULT_TEMPERATURE = 0.7
-    #DEFAULT_MAX_TOKENS = 4096
-    
     @classmethod
     def get_model(cls) -> BedrockModel:
         """
