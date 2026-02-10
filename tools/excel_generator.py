@@ -16,7 +16,6 @@ from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Font, Alignment, PatternFill
 from pydantic import ValidationError
-from handlers.approval_rules import ApprovalRuleEngine
 from handlers.error_handler import ErrorHandler
 from models.data_models import RouteInput, InvocationState
 
@@ -116,25 +115,21 @@ def _ensure_output_directory() -> Path:
     """
     出力ディレクトリを作成し、そのパスを返す。
     
-    環境変数OUTPUT_DIRECTORYから出力先を取得する。
-    設定されていない場合はデフォルトで"output"を使用する。
-    
     Returns:
-        Path: 出力ディレクトリのパス
+        Path: 出力ディレクトリのパス(output/)
         
     Raises:
         OSError: ディレクトリの作成に失敗した場合
     """
-    # 環境変数から出力ディレクトリを取得
-    output_dir = os.getenv("OUTPUT_DIRECTORY", "output")
-    output_path = Path(output_dir)
     
     try:
+        output_path = Path("output")
         output_path.mkdir(parents=True, exist_ok=True)
         _error_handler.log_info(
             f"出力ディレクトリを確認しました: {output_path}",
             context={"output_directory": str(output_path)}
         )
+
     except OSError as e:
         _error_handler.log_error(
             "DirectoryCreationError",
@@ -330,20 +325,6 @@ def receipt_excel_generator(
         # ヘルパー関数を使用して共通処理を実行
         applicant_name = _get_applicant_name(tool_context)
         application_date = _get_application_date(tool_context)
-        
-        # 金額チェック
-        approved, message = ApprovalRuleEngine.check_amount(amount)
-        if not approved:
-            _error_handler.log_error(
-                "AmountValidationError",
-                f"金額チェックに失敗しました: {message}",
-                context={"amount": amount}
-            )
-            return {
-                "success": False,
-                "file_path": "",
-                "message": message
-            }
         
         # ヘルパー関数でファイル名とパスを生成
         filename = _generate_filename("経費精算申請書")

@@ -63,12 +63,22 @@ def main():
     except RuntimeError as e:
         # ループ制限エラーの特別処理
         if "エージェントループの制限" in str(e):
-            user_message = error_handler.handle_loop_limit_error(e, {"error_type": "RuntimeError"})
+            user_message = error_handler.handle_loop_limit_error(
+                e, 
+                {"error_type": "RuntimeError"}
+            )
             print(user_message)
             sys.exit(1)
+
         else:
             # その他のRuntimeError
-            error_handler.log_error("RuntimeError", str(e), {"error_type": "RuntimeError"}, exc_info=True)
+            error_handler.log_error(
+                "RuntimeError", 
+                str(e), 
+                {"error_type": "RuntimeError"}, 
+                exc_info=True
+            )
+
             print("\n" + "=" * 60)
             print("【エラー】")
             print("=" * 60)
@@ -89,7 +99,12 @@ def main():
     except Exception as e:
         # その他のすべてのエラー
         error_type = type(e).__name__
-        error_handler.log_error("UnexpectedError", str(e), {"error_type": error_type}, exc_info=True)
+        error_handler.log_error(
+            "UnexpectedError", 
+            str(e), 
+            {"error_type": error_type}, 
+            exc_info=True
+        )
         
         print("\n" + "=" * 60)
         print("【予期しないエラー】")
