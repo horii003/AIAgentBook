@@ -17,7 +17,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.styles import Font, Alignment, PatternFill
 from pydantic import ValidationError
 from handlers.error_handler import ErrorHandler
-from models.data_models import RouteInput, InvocationState
+from models.data_models import RouteInput, InvocationState, ReceiptExpenseInput
 
 
 # エラーハンドラーの初期化
@@ -326,6 +326,39 @@ def receipt_excel_generator(
         applicant_name = _get_applicant_name(tool_context)
         application_date = _get_application_date(tool_context)
         
+        # Pydanticモデルでバリデーション
+        try:
+            input_data = ReceiptExpenseInput(
+                store_name=store_name,
+                amount=amount,
+                date=date,
+                items=items,
+                expense_category=expense_category
+            )
+        except ValidationError as e:
+            error_messages = []
+            for error in e.errors():
+                field = ".".join(str(loc) for loc in error["loc"])
+                error_messages.append(f"{field}: {error['msg']}")
+            
+            # handle_validation_errorでログ出力
+            _error_handler.handle_validation_error(
+                e,
+                context={
+                    "store_name": store_name,
+                    "amount": amount,
+                    "date": date,
+                    "items": items,
+                    "expense_category": expense_category
+                }
+            )
+            
+            return {
+                "success": False,
+                "file_path": "",
+                "message": f"エラー: 入力データが不正です - {', '.join(error_messages)}"
+            }
+        
         # ヘルパー関数でファイル名とパスを生成
         filename = _generate_filename("経費精算申請書")
         output_path = _ensure_output_directory()
@@ -366,28 +399,28 @@ def receipt_excel_generator(
         # 領収書情報
         ws[f"A{current_row}"] = "店舗名"
         _apply_header_style(ws[f"A{current_row}"], styles)
-        ws[f"B{current_row}"] = store_name
+        ws[f"B{current_row}"] = input_data.store_name
         current_row += 1
         
         ws[f"A{current_row}"] = "金額"
         _apply_header_style(ws[f"A{current_row}"], styles)
-        ws[f"B{current_row}"] = f"¥{amount:,.0f}"
+        ws[f"B{current_row}"] = f"¥{input_data.amount:,.0f}"
         current_row += 1
         
         ws[f"A{current_row}"] = "購入日"
         _apply_header_style(ws[f"A{current_row}"], styles)
-        ws[f"B{current_row}"] = date
+        ws[f"B{current_row}"] = input_data.date
         current_row += 1
         
         ws[f"A{current_row}"] = "経費区分"
         _apply_header_style(ws[f"A{current_row}"], styles)
-        ws[f"B{current_row}"] = expense_category
+        ws[f"B{current_row}"] = input_data.expense_category
         current_row += 1
         
         # 品目リスト
         ws[f"A{current_row}"] = "品目"
         _apply_header_style(ws[f"A{current_row}"], styles)
-        ws[f"B{current_row}"] = ", ".join(items)
+        ws[f"B{current_row}"] = ", ".join(input_data.items)
         current_row += 1
         
         # 空行

@@ -78,3 +78,14 @@ class FareCalculationInput(BaseModel):
     _validate_date = field_validator("date")(validate_date_string)
     _normalize_transport = field_validator("transport_type")(normalize_transport_type)
 
+
+class ReceiptExpenseInput(BaseModel):
+    """経費精算申請の入力データ"""
+    store_name: str = Field(..., min_length=1, description="店舗名")
+    amount: float = Field(..., gt=0, description="金額（円）")
+    date: str = Field(..., description="購入日（YYYY-MM-DD形式）")
+    items: List[str] = Field(..., min_length=1, description="品目リスト")
+    expense_category: str = Field(..., min_length=1, description="経費区分")
+    
+    _validate_date = field_validator("date")(validate_date_string)
+
