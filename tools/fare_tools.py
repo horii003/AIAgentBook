@@ -7,12 +7,8 @@ from models.data_models import FareData, TrainFareRoute, FareCalculationInput
 from handlers.error_handler import ErrorHandler
 
 
-# グローバル変数として運賃データを保持
-_fare_data_cache = None
-
 # エラーハンドラーの初期化
 _error_handler = ErrorHandler()
-
 
 #運賃データの読み込み関数
 def load_fare_data() -> dict:
@@ -30,12 +26,6 @@ def load_fare_data() -> dict:
         ValueError: データ形式が不正な場合
     """
 
-    global _fare_data_cache
-    
-    # 一度読み込んでいればキャッシュをそのまま返す
-    if _fare_data_cache is not None:
-        return _fare_data_cache
-    
     # ファイルパスの設定
     train_fares_path = os.path.join("data", "train_fares.json")
     fixed_fares_path = os.path.join("data", "fixed_fares.json")
@@ -75,16 +65,17 @@ def load_fare_data() -> dict:
             fixed_fares=fixed_data
         )
         
-        # データをキャッシュ（辞書形式で保持）
-        _fare_data_cache = {
+        # バリデーション済みデータを辞書形式に変換
+        dict_fare_data = {
             "train_fares": [route.model_dump() for route in fare_data_model.train_fares],
             "fixed_fares": fare_data_model.fixed_fares
         }
 
         _error_handler.log_info('運賃データを読み込みました')
 
-        return _fare_data_cache
+        return dict_fare_data
     
+
     except json.JSONDecodeError as e:
         error_msg = f"JSONファイルの解析に失敗しました: {e}"
         context = {"error_type": "JSONDecodeError", "train_fares_path": train_fares_path, "fixed_fares_path": fixed_fares_path}
