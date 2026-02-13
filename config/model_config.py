@@ -12,6 +12,10 @@ class ModelConfig:
     # モデルID
     DEFAULT_MODEL_ID = "jp.anthropic.claude-sonnet-4-5-20250929-v1:0"
     
+    # ガードレール設定
+    GUARDRAIL_ID = "63ez4e04xo0g"
+    GUARDRAIL_VERSION = "DRAFT"
+    
     @classmethod
     def get_model(cls) -> BedrockModel:
         """
@@ -22,4 +26,7 @@ class ModelConfig:
         """
         return BedrockModel(
             model_id=cls.DEFAULT_MODEL_ID,
+            guardrail_id=cls.GUARDRAIL_ID,
+            guardrail_version=cls.GUARDRAIL_VERSION,
+            guardrail_trace="enabled",
         )
