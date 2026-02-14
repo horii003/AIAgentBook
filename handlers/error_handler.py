@@ -4,6 +4,33 @@ from datetime import datetime
 from typing import Optional
 
 
+class LoopLimitError(RuntimeError):
+    """
+    エージェントReActループの制限エラー
+    
+    エージェントのループが最大回数に達した場合に発生します。
+    """
+    
+    def __init__(self, current_iteration: int, max_iterations: int, agent_name: str):
+        """
+        初期化
+        
+        Args:
+            current_iteration: 現在のループ回数
+            max_iterations: 最大ループ回数
+            agent_name: エージェント名
+        """
+        self.current_iteration = current_iteration
+        self.max_iterations = max_iterations
+        self.agent_name = agent_name
+        
+        message = (
+            f"エージェント '{agent_name}' のループ制限に到達しました "
+            f"({current_iteration}/{max_iterations}回)"
+        )
+        super().__init__(message)
+
+
 class ErrorHandler:
     """エラーハンドリング + ログ出力ヘルパー関数クラス"""
     
@@ -18,6 +45,20 @@ class ErrorHandler:
         self.logger = logging.getLogger(__name__)
 
 
+    def log_debug(self, message: str, context: Optional[dict] = None):
+        """
+        デバッグログを出力
+        
+        Args:
+            message: ログメッセージ
+            context: コンテキスト情報（オプション）
+        """
+        if context:
+            self.logger.debug(f"{message} | Context: {context}")
+        else:
+            self.logger.debug(message)
+    
+
     def log_info(self, message: str, context: Optional[dict] = None):
         """
         情報ログを出力
@@ -30,6 +71,20 @@ class ErrorHandler:
             self.logger.info(f"{message} | Context: {context}")
         else:
             self.logger.info(message)
+    
+
+    def log_warning(self, message: str, context: Optional[dict] = None):
+        """
+        警告ログを出力
+        
+        Args:
+            message: ログメッセージ
+            context: コンテキスト情報（オプション）
+        """
+        if context:
+            self.logger.warning(f"{message} | Context: {context}")
+        else:
+            self.logger.warning(message)
     
 
     def log_error(self, error_type: str, message: str, context: Optional[dict] = None, exc_info: bool = False):
@@ -48,8 +103,23 @@ class ErrorHandler:
             self.logger.error(f"{error_type}: {message} | Context: {context}")
     
 
+    def log_critical(self, message: str, context: Optional[dict] = None, exc_info: bool = False):
+        """
+        重大なエラーログを出力
+        
+        Args:
+            message: ログメッセージ
+            context: コンテキスト情報（オプション）
+            exc_info: スタックトレースをログに含めるか
+        """
+        if exc_info:
+            self.logger.critical(f"{message} | Context: {context}", exc_info=True)
+        else:
+            self.logger.critical(f"{message} | Context: {context}")
+    
 
-#別途エラーハンドリングを定義 ==========
+
+#エラーハンドリングを定義
 
     def handle_bedrock_error(self, error: Exception, context: Optional[dict] = None) -> str:
         """
@@ -182,7 +252,7 @@ class ErrorHandler:
             str: ユーザー向けエラーメッセージ
         """
         error_message = f"入力データの検証に失敗しました: {str(error)}"
-        
+
         #ログ出力
         self.log_error("ValidationError", error_message, context)
         
@@ -196,19 +266,23 @@ class ErrorHandler:
         return user_message.strip()
     
     
-    def handle_loop_limit_error(self, error: Exception, context: Optional[dict] = None) -> str:
+    def handle_loop_limit_error(self, error: LoopLimitError, context: Optional[dict] = None) -> str:
         """
         エージェントループ制限エラーの処理
         
         Args:
-            error: エラーオブジェクト
+            error: LoopLimitErrorオブジェクト
             context: エラーコンテキスト
         
         Returns:
             str: ユーザー向けエラーメッセージ
         """
-        error_message = f"エージェントループの制限に到達しました: {str(error)}"
-        self.log_error("LoopLimitError", error_message, context)
+        # ログ出力
+        self.log_error(
+            "LoopLimitError",
+            f"エージェント '{error.agent_name}' がループ制限に到達: {error.current_iteration}/{error.max_iterations}",
+            context
+        )
         
         user_message = """
         申し訳ございません。処理が複雑すぎて完了できませんでした。

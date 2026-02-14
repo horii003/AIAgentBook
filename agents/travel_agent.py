@@ -6,6 +6,7 @@ from tools.fare_tools import load_fare_data, calculate_fare
 from tools.excel_generator import travel_excel_generator
 from session.session_manager import SessionManagerFactory
 from handlers.human_approval_hook import HumanApprovalHook
+from handlers.error_handler import LoopLimitError
 from prompt.prompt_travel import _get_travel_system_prompt
 from handlers.loop_control_hook import LoopControlHook
 from config.model_config import ModelConfig
@@ -104,23 +105,23 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
         
         return str(response)
     
+    except LoopLimitError as e:
+        # ループ制限エラーの処理（LoopLimitError専用）
+        logger.info(f"[travel_agent] LoopLimitErrorをキャッチ: {e.agent_name}")
+        error_msg = (
+            "申し訳ございません。処理が複雑すぎて完了できませんでした。\n\n"
+            "以下のいずれかをお試しください：\n"
+            "1. 経路を1つずつ申請してください\n"
+            "2. より具体的な情報（日付、出発地、目的地、交通手段）を提供してください\n"
+            "3. 不要な情報を削除してください\n\n"
+            "受付窓口に戻りますので、もう一度シンプルな内容でお試しください。"
+        )
+        return error_msg
+    
     except RuntimeError as e:
-        # ループ制限エラーの処理
-        if "エージェントループの制限" in str(e):
-            # ログ記録なし（詳細はloop_control_hookで記録済み）
-            error_msg = (
-                "申し訳ございません。処理が複雑すぎて完了できませんでした。\n\n"
-                "以下のいずれかをお試しください：\n"
-                "1. 経路を1つずつ申請してください\n"
-                "2. より具体的な情報（日付、出発地、目的地、交通手段）を提供してください\n"
-                "3. 不要な情報を削除してください\n\n"
-                "受付窓口に戻りますので、もう一度シンプルな内容でお試しください。"
-            )
-            logger.info(f"[travel_agent] ループ制限エラーメッセージを返却: {error_msg[:50]}...")
-            return error_msg
-        else:
-            logger.warning(f"[travel_agent] 予期しないRuntimeError: {str(e)[:100]}")
-            return f"エラーが発生しました。受付窓口に戻ります。"
+        # その他のRuntimeError
+        logger.warning(f"[travel_agent] 予期しないRuntimeError: {str(e)[:100]}")
+        return f"エラーが発生しました。受付窓口に戻ります。"
     
     except Exception as e:
         logger.error(f"[travel_agent] エラーが発生しました: {e}")

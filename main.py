@@ -5,7 +5,7 @@ import logging
 import warnings
 from dotenv import load_dotenv
 from agents.reception_agent import ReceptionAgent
-from handlers.error_handler import ErrorHandler
+from handlers.error_handler import ErrorHandler, LoopLimitError
 
 
 # .envファイルを読み込み
@@ -60,33 +60,33 @@ def main():
         sys.exit(0)
     
 
+    except LoopLimitError as e:
+        # ループ制限エラーの処理
+        user_message = error_handler.handle_loop_limit_error(
+            e, 
+            {"error_type": "LoopLimitError"}
+        )
+        print(user_message)
+        sys.exit(1)
+
+
     except RuntimeError as e:
-        # ループ制限エラーの特別処理
-        if "エージェントループの制限" in str(e):
-            user_message = error_handler.handle_loop_limit_error(
-                e, 
-                {"error_type": "RuntimeError"}
-            )
-            print(user_message)
-            sys.exit(1)
+        # その他のRuntimeError
+        error_handler.log_error(
+            "RuntimeError", 
+            str(e), 
+            {"error_type": "RuntimeError"}, 
+            exc_info=True
+        )
 
-        else:
-            # その他のRuntimeError
-            error_handler.log_error(
-                "RuntimeError", 
-                str(e), 
-                {"error_type": "RuntimeError"}, 
-                exc_info=True
-            )
-
-            print("\n" + "=" * 60)
-            print("【エラー】")
-            print("=" * 60)
-            print("\n予期しないエラーが発生しました。")
-            print("システムを再起動してください。")
-            print("\n問題が解決しない場合は、システム管理者にお問い合わせください。")
-            print("=" * 60)
-            sys.exit(1)
+        print("\n" + "=" * 60)
+        print("【エラー】")
+        print("=" * 60)
+        print("\n予期しないエラーが発生しました。")
+        print("システムを再起動してください。")
+        print("\n問題が解決しない場合は、システム管理者にお問い合わせください。")
+        print("=" * 60)
+        sys.exit(1)
     
     
     except ConnectionError as e:
