@@ -15,7 +15,7 @@ from strands.agent.conversation_manager import SlidingWindowConversationManager
 from agents.travel_agent import travel_agent
 from agents.receipt_expense_agent import receipt_expense_agent
 from session.session_manager import SessionManagerFactory
-from handlers.error_handler import ErrorHandler
+from handlers.error_handler import ErrorHandler, LoopLimitError
 from handlers.loop_control_hook import LoopControlHook
 from prompt.prompt_reception import RECEPTION_SYSTEM_PROMPT
 from config.model_config import ModelConfig
@@ -160,36 +160,29 @@ class ReceptionAgent:
                 break
 
 
-            except RuntimeError as e:
+            except LoopLimitError as e:
                 # ループ制限エラーの処理
-                if "エージェントループの制限" in str(e):
-                    self._error_handler.log_error(
-                        "RuntimeError",
-                        f"処理が複雑なためエラーが発生しました: {str(e)}"
-                    )
+                user_message = self._error_handler.handle_loop_limit_error(
+                    e,
+                    {"agent": "reception_agent"}
+                )
 
-                    print("\n" + "="*60)
-                    print("【処理が複雑すぎます】")
-                    print("="*60)
-                    print("\n申し訳ございません。処理が複雑すぎて完了できませんでした。")
-                    print("\n以下のいずれかをお試しください：")
-                    print("1. タスクをより小さな単位に分割してください")
-                    print("   例：複数の申請を一度に行う場合は、1つずつ申請してください")
-                    print("2. より具体的な指示を提供してください")
-                    print("   例：「交通費を申請したい」→「1月10日の東京から大阪への新幹線代を申請したい」")
-                    print("3. 不要な情報を削除してください")
-                    print("   例：申請に関係のない質問や情報は別途お尋ねください")
-                    print("\n" + "="*60)
-                    print("もう一度、シンプルな内容でお試しください。")
-                    print("="*60 + "\n")
+                print("\n" + "="*60)
+                print("【処理が複雑すぎます】")
+                print("="*60)
+                print(f"\n{user_message}")
+                print("\n" + "="*60)
+                print("もう一度、シンプルな内容でお試しください。")
+                print("="*60 + "\n")
 
-                else:
-                    # その他のRuntimeError
-                    self._error_handler.log_error(
-                        "RuntimeError",
-                        f"その他のエラーが発生しました: {str(e)}"
-                    )
-                    print(f"\nエラーが発生しました。もう一度お試しください。\n")
+
+            except RuntimeError as e:
+                # その他のRuntimeError
+                self._error_handler.log_error(
+                    "RuntimeError",
+                    f"その他のエラーが発生しました: {str(e)}"
+                )
+                print(f"\nエラーが発生しました。もう一度お試しください。\n")
 
             except Exception as e:
                 # 予期しないエラー

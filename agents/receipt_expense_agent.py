@@ -6,6 +6,7 @@ from strands_tools import image_reader
 from tools.excel_generator import receipt_excel_generator
 from session.session_manager import SessionManagerFactory
 from handlers.human_approval_hook import HumanApprovalHook
+from handlers.error_handler import LoopLimitError
 from prompt.prompt_receipt import _get_receipt_expense_system_prompt
 from handlers.loop_control_hook import LoopControlHook
 from config.model_config import ModelConfig
@@ -97,19 +98,20 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
         
         return str(response)
     
+    except LoopLimitError as e:
+        # ループ制限エラーの処理（LoopLimitError専用）
+        return (
+            "申し訳ございません。処理が複雑すぎて完了できませんでした。\n\n"
+            "以下のいずれかをお試しください：\n"
+            "1. 領収書を1枚ずつ申請してください\n"
+            "2. より具体的な情報を提供してください\n"
+            "3. 不要な情報を削除してください\n\n"
+            "受付窓口に戻りますので、もう一度シンプルな内容でお試しください。"
+        )
+    
     except RuntimeError as e:
-        # ループ制限エラーの処理
-        if "エージェントループの制限" in str(e):
-            return (
-                "申し訳ございません。処理が複雑すぎて完了できませんでした。\n\n"
-                "以下のいずれかをお試しください：\n"
-                "1. 領収書を1枚ずつ申請してください\n"
-                "2. より具体的な情報を提供してください\n"
-                "3. 不要な情報を削除してください\n\n"
-                "受付窓口に戻りますので、もう一度シンプルな内容でお試しください。"
-            )
-        else:
-            return f"エラーが発生しました。受付窓口に戻ります。"
+        # その他のRuntimeError
+        return f"エラーが発生しました。受付窓口に戻ります。"
     
     except Exception as e:
         logger.error(f"[receipt_expense_agent] エラーが発生しました: {e}")

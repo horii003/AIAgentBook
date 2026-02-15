@@ -16,9 +16,7 @@ from strands.hooks import (
     BeforeToolCallEvent,
     AfterToolCallEvent
 )
-import logging
-
-logger = logging.getLogger(__name__)
+from handlers.error_handler import ErrorHandler, LoopLimitError
 
 
 class LoopControlHook(HookProvider):
@@ -48,6 +46,7 @@ class LoopControlHook(HookProvider):
         self.max_iterations = max_iterations
         self.agent_name = agent_name
         self.current_iteration = 0
+        self._error_handler = ErrorHandler()  # ErrorHandlerを使用
     
     def register_hooks(self, registry: HookRegistry, **kwargs: Any) -> None:
         """フックの登録"""
@@ -66,8 +65,8 @@ class LoopControlHook(HookProvider):
             event: BeforeInvocationEvent
         """
         self.current_iteration = 0
-        logger.info(f"[{self.agent_name}] BeforeInvocationEvent: エージェント呼び出し開始")
-        logger.info(f"[{self.agent_name}] 最大ループ回数: {self.max_iterations}")
+        self._error_handler.log_info(f"[{self.agent_name}] BeforeInvocationEvent: エージェント呼び出し開始")
+        self._error_handler.log_info(f"[{self.agent_name}] 最大ループ回数: {self.max_iterations}")
     
     def on_before_model_call(self, event: BeforeModelCallEvent) -> None:
         """
@@ -76,7 +75,7 @@ class LoopControlHook(HookProvider):
         Args:
             event: BeforeModelCallEvent
         """
-        logger.info(f"[{self.agent_name}] BeforeModelCallEvent: モデル呼び出し #{self.current_iteration + 1}")
+        self._error_handler.log_info(f"[{self.agent_name}] BeforeModelCallEvent: モデル呼び出し #{self.current_iteration + 1}")
     
     def on_after_model_call(self, event: AfterModelCallEvent) -> None:
         """
@@ -92,21 +91,23 @@ class LoopControlHook(HookProvider):
         # ループカウントをインクリメント
         self.current_iteration += 1
         
-        logger.info(f"[{self.agent_name}] AfterModelCallEvent: モデル呼び出し完了 ({self.current_iteration}/{self.max_iterations})")
+        self._error_handler.log_info(
+            f"[{self.agent_name}] AfterModelCallEvent: モデル呼び出し完了 ({self.current_iteration}/{self.max_iterations})"
+        )
         
         # 最大回数チェック
         if self.current_iteration >= self.max_iterations:
-            error_message = (
-                f"エージェントループの制限に到達しました（{self.max_iterations}回）。\n"
-                f"タスクが複雑すぎる可能性があります。\n"
-                f"以下のいずれかをお試しください：\n"
-                f"1. タスクをより小さな単位に分割する\n"
-                f"2. より具体的な指示を提供する\n"
-                f"3. 不要な情報を削除する"
+            # 警告ログを出力
+            self._error_handler.log_warning(
+                f"[{self.agent_name}] ループ制限到達: {self.current_iteration}/{self.max_iterations}"
             )
-            # エラー発生をログに記録
-            logger.warning(f"[{self.agent_name}] ループ制限到達: {self.current_iteration}/{self.max_iterations}")
-            raise RuntimeError(error_message)
+            
+            # LoopLimitErrorを発生
+            raise LoopLimitError(
+                current_iteration=self.current_iteration,
+                max_iterations=self.max_iterations,
+                agent_name=self.agent_name
+            )
     
     def on_before_tool_call(self, event: BeforeToolCallEvent) -> None:
         """
@@ -116,7 +117,7 @@ class LoopControlHook(HookProvider):
             event: BeforeToolCallEvent
         """
         tool_name = event.tool_use.get("name", "unknown")
-        logger.info(f"[{self.agent_name}] BeforeToolCallEvent: ツール呼び出し - {tool_name}")
+        self._error_handler.log_info(f"[{self.agent_name}] BeforeToolCallEvent: ツール呼び出し - {tool_name}")
     
     def on_after_tool_call(self, event: AfterToolCallEvent) -> None:
         """
@@ -126,7 +127,7 @@ class LoopControlHook(HookProvider):
             event: AfterToolCallEvent
         """
         tool_name = event.tool_use.get("name", "unknown")
-        logger.info(f"[{self.agent_name}] AfterToolCallEvent: ツール呼び出し完了 - {tool_name}")
+        self._error_handler.log_info(f"[{self.agent_name}] AfterToolCallEvent: ツール呼び出し完了 - {tool_name}")
     
     def on_after_invocation(self, event: AfterInvocationEvent) -> None:
         """
@@ -135,4 +136,6 @@ class LoopControlHook(HookProvider):
         Args:
             event: AfterInvocationEvent
         """
-        logger.info(f"[{self.agent_name}] AfterInvocationEvent: エージェント呼び出し終了（合計ループ回数: {self.current_iteration}）")
+        self._error_handler.log_info(
+            f"[{self.agent_name}] AfterInvocationEvent: エージェント呼び出し終了（合計ループ回数: {self.current_iteration}）"
+        )
