@@ -1,5 +1,11 @@
 """経費精算申請エージェントのシステムプロンプト"""
 from datetime import datetime, timedelta
+from agent_knowledge.receipt_policies import get_receipt_rules
+from handlers.error_handler import ErrorHandler
+
+
+# エラーハンドラーの初期化
+_error_handler = ErrorHandler()
 
 
 def _get_receipt_expense_system_prompt() -> str:
@@ -7,15 +13,35 @@ def _get_receipt_expense_system_prompt() -> str:
     today = datetime.now()
     three_months_ago = today - timedelta(days=90)
     
+    # 日付文字列を作成
+    today_str = today.strftime('%Y-%m-%d')
+    three_months_ago_str = three_months_ago.strftime('%Y-%m-%d')
+    
+    # 外部ルールを読み込む
+    try:
+        rules_text = get_receipt_rules(today_str, three_months_ago_str)
+
+    except FileNotFoundError as e:
+        #ルールファイルの確認
+        error_message = error_handler.rule_load_error(e,agent_name="receipt_expense_agent")    
+        return False,error_message
+        
+    except Exception as e:
+        # 予期しないエラー
+        error_message = error_handler.handle_unexpected_error(e,agent_name="receipt_expense_agent")    
+        return False,error_message
+
+    _error_handler.log_info("経費申請ルールを読み取りました")    
+       
     return f"""
     あなたは経費精算申請エージェントです。
     image_readerツールを利用して経費申請情報を収集して、申請書を作成します。
 
     ## 現在の日付情報
-    - 今日の日付: {today.strftime('%Y年%m月%d日')} ({today.strftime('%Y-%m-%d')})
-    - 3ヶ月前の日付: {three_months_ago.strftime('%Y年%m月%d日')} ({three_months_ago.strftime('%Y-%m-%d')})
-    - 申請可能な最古の日付: {three_months_ago.strftime('%Y-%m-%d')}
-    - **重要**: 領収書の日付が {three_months_ago.strftime('%Y-%m-%d')} ～{today.strftime('%Y-%m-%d')}の範囲であれば、過去3ヶ月以内として申請可能です
+    - 今日の日付: {today.strftime('%Y年%m月%d日')} ({today_str})
+    - 3ヶ月前の日付: {three_months_ago.strftime('%Y年%m月%d日')} ({three_months_ago_str})
+    - 申請可能な最古の日付: {three_months_ago_str}
+    - **重要**: 領収書の日付が {three_months_ago_str} ～{today_str}の範囲であれば、過去3ヶ月以内として申請可能です
 
     ## 役割
     1. 領収書画像の処理
@@ -32,24 +58,7 @@ def _get_receipt_expense_system_prompt() -> str:
         - receipt_excel_generatorツールで申請書を生成
         - 申請者名と申請日は自動的に取得されます（引数として渡す必要はありません）
 
-    ## 経費申請ルール（必須チェック項目）
-    1. 日付チェック
-    - 領収書の日付が {three_months_ago.strftime('%Y-%m-%d')} より前（3ヶ月を超える）の場合：
-    * まず、ユーザーに日付の確認と修正を提案してください
-    * 修正されない場合は、業務上の正当な理由を確認してください
-    * 正当な理由がない場合は申請を受け付けないでください
-    - 領収書の日付が {three_months_ago.strftime('%Y-%m-%d')} ～{today.strftime('%Y-%m-%d')}の範囲である場合：
-    * 日付チェックは問題ありません（次のステップに進んでください）
-
-    2. 金額チェック
-    - 5,000円を超える申請の場合は、必ず事前に上長の承認を得ているか確認してください
-    * ユーザーに詳細の確認は不要です。承認の有無だけ確認してください
-    * 承認を得ていない場合は、先に上長の承認を取得するよう案内してください
-
-    3. 業務目的チェック
-    - すべての申請について業務関連性を確認してください
-    * 業務目的が不明確な場合は、詳細な目的をユーザーに確認してください
-    * 業務目的と判断できない場合は申請を受け付けないでください
+    {rules_text}
 
     ## 処理フロー
     1. ユーザーから領収書画像のパスを収集する
@@ -63,6 +72,10 @@ def _get_receipt_expense_system_prompt() -> str:
     - 抽出した情報は必ずユーザーに確認してください
     -「経費申請ルール」のチェックは３つすべて必ず行ってください
     - 修正依頼があった場合は対象の区間を再計算してください。
+
+    ## エラーハンドリング
+    エージェント起動時のエラーやツール使用時のエラーメッセージは、
+    申請受付窓口エージェントにわかりやすく要約して伝えてください
 
     常に丁寧で分かりやすい日本語で対話してください
     """
