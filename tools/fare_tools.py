@@ -1,6 +1,7 @@
 """運賃計算関連のツール"""
 import json
 import os
+from typing import Tuple
 from strands import tool
 from pydantic import ValidationError
 from models.data_models import FareData, TrainFareRoute, FareCalculationInput
@@ -11,19 +12,14 @@ from handlers.error_handler import ErrorHandler
 _error_handler = ErrorHandler()
 
 #運賃データの読み込み関数
-def load_fare_data() -> dict:
+def load_fare_data():
     """
     dataフォルダから運賃データを読み込みます。
     
     Returns:
-        dict: {
-            "train_fares": List[dict],  # 電車の運賃テーブル
-            "fixed_fares": dict          # バス、タクシー、飛行機の固定運賃
-        }
-    
-    Raises:
-        FileNotFoundError: 運賃データファイルが見つからない場合
-        ValueError: データ形式が不正な場合
+        Tuple[bool, dict | str]: (成功フラグ, データまたはエラーメッセージ)
+            - 成功時: (True, 運賃データdict)
+            - エラー時: (False, ユーザー向けエラーメッセージstr)
     """
 
     # ファイルパスの設定
@@ -33,23 +29,18 @@ def load_fare_data() -> dict:
     # ファイルの存在有無を確認
     #電車運賃のファイル確認
     if not os.path.exists(train_fares_path):
-        error_msg = f"電車運賃データファイルが見つかりません: {train_fares_path}"
+        e = FileNotFoundError(f"電車運賃データファイルが見つかりません: {train_fares_path}")
         context = {"file": train_fares_path, "file_type": "train_fares"}
-        user_message = _error_handler.handle_fare_data_error(
-            FileNotFoundError(error_msg),
-            context
-        )
-        raise RuntimeError(user_message)
+        error_message = _error_handler.handle_fare_data_error(e, context)
+        return False, error_message
 
     #固定運賃のファイルの確認
     if not os.path.exists(fixed_fares_path):
-        error_msg = f"固定運賃データファイルが見つかりません: {fixed_fares_path}"
+        e = FileNotFoundError(f"固定運賃データファイルが見つかりません: {fixed_fares_path}")
         context = {"file": fixed_fares_path, "file_type": "fixed_fares"}
-        user_message = _error_handler.handle_fare_data_error(
-            FileNotFoundError(error_msg),
-            context
-        )
-        raise RuntimeError(user_message)
+        error_message = _error_handler.handle_fare_data_error(e, context)
+        return False, error_message
+        
     
     #運賃データの読み込み
     try:
@@ -73,40 +64,19 @@ def load_fare_data() -> dict:
 
         _error_handler.log_info('運賃データを読み込みました')
 
-        return dict_fare_data
+        return True, dict_fare_data
     
-
     except json.JSONDecodeError as e:
-        error_msg = f"JSONファイルの解析に失敗しました: {e}"
         context = {"error_type": "JSONDecodeError", "train_fares_path": train_fares_path, "fixed_fares_path": fixed_fares_path}
-        user_message = _error_handler.handle_fare_data_error(
-            ValueError(error_msg),
-            context
-        )
-        raise RuntimeError(user_message)
-
-
-    except ValidationError as e:
-        error_msg = f"運賃データの形式が不正です: {e}"
-        context = {"error_type": "ValidationError"}
-        user_message = _error_handler.handle_fare_data_error(
-            ValueError(error_msg),
-            context
-        )
-        raise RuntimeError(user_message)
-
+        error_message = _error_handler.handle_fare_data_error(e, context)
+        return False, error_message
 
     except Exception as e:
-        error_msg = f"運賃データの読み込み中にエラーが発生しました: {e}"
         context = {"error_type": type(e).__name__}
-        user_message = _error_handler.handle_fare_data_error(
-            ValueError(error_msg),
-            context
-        )
-        raise RuntimeError(user_message)
+        error_message = _error_handler.handle_fare_data_error(e, context)
+        return False, error_message
 
 
-#運賃計算用のツール
 @tool
 def calculate_fare(
     departure: str,
@@ -114,7 +84,6 @@ def calculate_fare(
     transport_type: str,
     date: str
 ) -> dict:
-
     """
     経路の交通費を計算します。
     
@@ -126,13 +95,22 @@ def calculate_fare(
     
     Returns:
         dict: {
-            "fare": float,           # 計算された運賃
-            "calculation_method": str # 計算方法の説明
+            "success": bool,         # 成功フラグ
+            "fare": float,           # 計算された運賃（エラー時は0）
+            "calculation_method": str, # 計算方法の説明（エラー時は空文字列）
+            "message": str           # 結果メッセージ（エラー時はエラーメッセージ）
         }
-    
-    Raises:
-        ValueError: 経路が運賃データに存在しない場合
     """
+    # ツール呼び出しログ
+    _error_handler.log_info(
+        "calculate_fareツールが呼び出されました",
+        context={
+            "departure": departure,
+            "destination": destination,
+            "transport_type": transport_type,
+            "date": date
+        }
+    )
     
     # Pydanticモデルで入力をバリデーション
     try:
@@ -143,54 +121,66 @@ def calculate_fare(
             date=date
         )
     except ValidationError as e:
-        error_messages = []
-        for error in e.errors():
-            field = ".".join(str(loc) for loc in error["loc"])
-            error_messages.append(f"{field}: {error['msg']}")
-        error_msg = f"入力データが不正です: {', '.join(error_messages)}"
         context = {
             "departure": departure,
             "destination": destination,
             "transport_type": transport_type,
             "date": date
         }
-        user_message = _error_handler.handle_validation_error(
-            ValueError(error_msg),
-            context
-        )
-        raise RuntimeError(user_message)
+        error_message = _error_handler.handle_validation_error(e, context)
+        return {
+            "success": False,
+            "fare": 0,
+            "calculation_method": "",
+            "message": error_message
+        }
     
     # 正規化された交通手段を使用
     normalized_transport = input_data.transport_type
     
-    # 運賃データの読み込み
-    fare_data = load_fare_data()
+    # 運賃データの読み込み関数の利用
+    success, fare_data = load_fare_data()
+    
+    # エラーが発生した場合
+    if not success:
+        return {
+            "success": False,
+            "fare": 0,
+            "calculation_method": "",
+            "message": fare_data  
+        }
 
     # 電車の場合の運賃検索
     if normalized_transport == "train":
         # 運賃テーブルから該当する経路を検索
         for route in fare_data["train_fares"]:
             if route["departure"] == departure and route["destination"] == destination:
+                _error_handler.log_info(
+                    f"運賃を計算しました: {departure} → {destination} = ¥{route['fare']}"
+                )
                 return {
+                    "success": True,
                     "fare": float(route["fare"]),
-                    "calculation_method": f"電車運賃テーブルから取得: {departure} → {destination}"
+                    "calculation_method": f"電車運賃テーブルから取得: {departure} → {destination}",
+                    "message": f"運賃を計算しました: ¥{route['fare']}"
                 }
         
         # 経路が見つからない場合
-        error_msg = f"電車の運賃データに該当する経路が見つかりません: {departure} → {destination}"
+        e = ValueError(f"電車の運賃データに該当する経路が見つかりません: {departure} → {destination}")
         context = {
             "departure": departure,
             "destination": destination,
             "transport_type": normalized_transport,
             "date": date
         }
-        user_message = _error_handler.handle_calculation_error(
-            ValueError(error_msg),
-            context
-        )
-        raise RuntimeError(user_message)
+        error_message = _error_handler.handle_calculation_error(e, context)
+        return {
+            "success": False,
+            "fare": 0,
+            "calculation_method": "",
+            "message": error_message
+        }
     
-
     # バス、タクシー、飛行機の場合の運賃検索（固定運賃）
     else:
         fare = fare_data["fixed_fares"][normalized_transport]
@@ -199,7 +189,11 @@ def calculate_fare(
             "taxi": "タクシー",
             "airplane": "飛行機"
         }
+        _error_handler.log_info(f"運賃を計算しました: {transport_name_map[normalized_transport]} = ¥{fare}"
+        )
         return {
+            "success": True,
             "fare": float(fare),
-            "calculation_method": f"{transport_name_map[normalized_transport]}の固定運賃"
+            "calculation_method": f"{transport_name_map[normalized_transport]}の固定運賃",
+            "message": f"運賃を計算しました: ¥{fare}"
         }

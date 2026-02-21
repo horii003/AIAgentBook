@@ -6,7 +6,7 @@ from strands_tools import image_reader
 from tools.excel_generator import receipt_excel_generator
 from session.session_manager import SessionManagerFactory
 from handlers.human_approval_hook import HumanApprovalHook
-from handlers.error_handler import LoopLimitError
+from handlers.error_handler import LoopLimitError, ErrorHandler
 from prompt.prompt_receipt import _get_receipt_expense_system_prompt
 from handlers.loop_control_hook import LoopControlHook
 from config.model_config import ModelConfig
@@ -77,9 +77,11 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
     Returns:
         str: エージェントからの応答
     """
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info("[receipt_expense_agent] ツールが呼び出されました")
+    # ErrorHandlerのインスタンスを作成
+    error_handler = ErrorHandler()
+    
+    # ツール呼び出しをログに記録
+    error_handler.log_info("[receipt_expense_agent] ツールが呼び出されました")
 
     try:
         # invocation_stateは受付エージェント側でバリデーション済み
@@ -99,21 +101,32 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
         return str(response)
     
     except LoopLimitError as e:
-        # ループ制限エラーの処理（LoopLimitError専用）
-        return (
-            "申し訳ございません。処理が複雑すぎて完了できませんでした。\n\n"
-            "以下のいずれかをお試しください：\n"
-            "1. 領収書を1枚ずつ申請してください\n"
-            "2. より具体的な情報を提供してください\n"
-            "3. 不要な情報を削除してください\n\n"
-            "受付窓口に戻りますので、もう一度シンプルな内容でお試しください。"
+        # ループ制限エラー
+        return error_handler.handle_loop_limit_error(
+            e,
+            context={
+                "agent": "receipt_expense_agent",
+                "query": query[:100]  # ユーザー入力の最初の100文字
+            }
         )
     
     except RuntimeError as e:
-        # その他のRuntimeError
-        return f"エラーが発生しました。受付窓口に戻ります。"
+        # RuntimeError
+        return error_handler.handle_runtime_error(
+            e,
+            agent_name="receipt_expense_agent",
+            context={
+                "query": query[:100]
+            }
+        )
     
     except Exception as e:
-        logger.error(f"[receipt_expense_agent] エラーが発生しました: {e}")
-        return f"エラーが発生しました。受付窓口に戻ります。"
+        # 予期しないエラー
+        return error_handler.handle_unexpected_error(
+            e,
+            agent_name="receipt_expense_agent",
+            context={
+                "query": query[:100]
+            }
+        )
 
