@@ -1,12 +1,6 @@
 """経費精算申請エージェントのシステムプロンプト"""
 from datetime import datetime, timedelta
 from agent_knowledge.receipt_policies import get_receipt_rules
-from handlers.error_handler import ErrorHandler
-
-
-# エラーハンドラーの初期化
-_error_handler = ErrorHandler()
-
 
 def _get_receipt_expense_system_prompt() -> str:
     """現在日付を含むシステムプロンプトを動的に生成"""
@@ -18,20 +12,7 @@ def _get_receipt_expense_system_prompt() -> str:
     three_months_ago_str = three_months_ago.strftime('%Y-%m-%d')
     
     # 外部ルールを読み込む
-    try:
-        rules_text = get_receipt_rules(today_str, three_months_ago_str)
-
-    except FileNotFoundError as e:
-        #ルールファイルの確認
-        error_message = error_handler.rule_load_error(e,agent_name="receipt_expense_agent")    
-        return False,error_message
-        
-    except Exception as e:
-        # 予期しないエラー
-        error_message = error_handler.handle_unexpected_error(e,agent_name="receipt_expense_agent")    
-        return False,error_message
-
-    _error_handler.log_info("経費申請ルールを読み取りました")    
+    rules_text = get_receipt_rules(today_str, three_months_ago_str)
        
     return f"""
     あなたは経費精算申請エージェントです。

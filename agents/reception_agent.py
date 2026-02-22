@@ -176,7 +176,6 @@ class ReceptionAgent:
                 print("\n" + "="*60)
                 print(f"\n{user_message}")
                 print("="*60 + "\n")
-                break
 
 
             except RuntimeError as e:
