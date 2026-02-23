@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from unittest.mock import Mock
 from tools.fare_tools import load_fare_data, calculate_fare
-from tools.excel_generator import travel_excel_generator
+from tools.excel_generator import transportation_excel_generator
 
 
 class TestFareTools:
@@ -127,7 +127,7 @@ class TestExcelGeneratorTools:
         mock_context = Mock()
         mock_context.invocation_state = {"applicant_name": "test001"}
         
-        result = travel_excel_generator(
+        result = transportation_excel_generator(
             routes=sample_routes,
             tool_context=mock_context
         )
@@ -147,7 +147,7 @@ class TestExcelGeneratorTools:
         mock_context = Mock()
         mock_context.invocation_state = {"applicant_name": "test003"}
         
-        result = travel_excel_generator(
+        result = transportation_excel_generator(
             routes=[],
             tool_context=mock_context
         )
@@ -170,7 +170,7 @@ class TestExcelGeneratorTools:
         mock_context = Mock()
         mock_context.invocation_state = {"applicant_name": "test005"}
         
-        result = travel_excel_generator(
+        result = transportation_excel_generator(
             routes=invalid_routes,
             tool_context=mock_context
         )
@@ -182,3 +182,4 @@ class TestExcelGeneratorTools:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
