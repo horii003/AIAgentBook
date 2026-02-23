@@ -6,7 +6,7 @@ from tools.fare_tools import load_fare_data, calculate_fare
 from tools.excel_generator import travel_excel_generator
 from session.session_manager import SessionManagerFactory
 from handlers.human_approval_hook import HumanApprovalHook
-from handlers.error_handler import LoopLimitError
+from handlers.error_handler import LoopLimitError, ErrorHandler
 from prompt.prompt_travel import _get_travel_system_prompt
 from handlers.loop_control_hook import LoopControlHook
 from config.model_config import ModelConfig
@@ -23,11 +23,6 @@ def _get_travel_agent(session_id: str) -> Agent:
     Returns:
         Agent: 交通費精算申請エージェントのインスタンス
     """
-    # 運賃データの事前読み込み
-    try:
-        load_fare_data()
-    except Exception as e:
-        raise RuntimeError(f"運賃データの読み込みに失敗しました: {e}")
     
     # セッションマネージャーの作成
     session_manager = SessionManagerFactory.create_session_manager(session_id)
@@ -84,9 +79,11 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
     Returns:
         str: エージェントからの応答
     """
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info("[travel_agent] ツールが呼び出されました")
+    # ErrorHandlerのインスタンスを作成
+    error_handler = ErrorHandler()
+    
+    # ツール呼び出しをログに記録
+    error_handler.log_info("[travel_agent] ツールが呼び出されました")
 
     try:
         # invocation_stateは受付エージェント側でバリデーション済み
@@ -106,24 +103,32 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
         return str(response)
     
     except LoopLimitError as e:
-        # ループ制限エラーの処理（LoopLimitError専用）
-        logger.info(f"[travel_agent] LoopLimitErrorをキャッチ: {e.agent_name}")
-        error_msg = (
-            "申し訳ございません。処理が複雑すぎて完了できませんでした。\n\n"
-            "以下のいずれかをお試しください：\n"
-            "1. 経路を1つずつ申請してください\n"
-            "2. より具体的な情報（日付、出発地、目的地、交通手段）を提供してください\n"
-            "3. 不要な情報を削除してください\n\n"
-            "受付窓口に戻りますので、もう一度シンプルな内容でお試しください。"
+        # ループ制限エラー：ErrorHandlerで処理
+        return error_handler.handle_loop_limit_error(
+            e,
+            context={
+                "agent": "travel_agent",
+                "query": query[:100]  # ユーザー入力の最初の100文字
+            }
         )
-        return error_msg
     
     except RuntimeError as e:
-        # その他のRuntimeError
-        logger.warning(f"[travel_agent] 予期しないRuntimeError: {str(e)[:100]}")
-        return f"エラーが発生しました。受付窓口に戻ります。"
+        # RuntimeError
+        return error_handler.handle_runtime_error(
+            e,
+            agent_name="travel_agent",
+            context={
+                "query": query[:100]
+            }
+        )
     
     except Exception as e:
-        logger.error(f"[travel_agent] エラーが発生しました: {e}")
-        return f"エラーが発生しました。受付窓口に戻ります。"
+        # 予期しないエラー
+        return error_handler.handle_unexpected_error(
+            e,
+            agent_name="travel_agent",
+            context={
+                "query": query[:100]
+            }
+        )
 

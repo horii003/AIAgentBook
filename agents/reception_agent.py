@@ -154,9 +154,13 @@ class ReceptionAgent:
                 )
                 print(f"\nエージェント: {response}")
                 
+
             except KeyboardInterrupt:
-                self._error_handler.log_info("ユーザーが処理を中断しました")
-                print("\n\nエージェント: 処理を中断しました。")
+                # キーボード中断（Ctrl+C）：ErrorHandlerで処理
+                user_message = self._error_handler.handle_keyboard_interrupt(
+                    context={"session_id": self._session_id}
+                )
+                print(f"\n\nエージェント: {user_message}")
                 break
 
 
@@ -164,31 +168,37 @@ class ReceptionAgent:
                 # ループ制限エラーの処理
                 user_message = self._error_handler.handle_loop_limit_error(
                     e,
-                    {"agent": "reception_agent"}
+                    {"agent": e.agent_name, 
+                    "session_id": self._session_id
+                    }
                 )
 
                 print("\n" + "="*60)
-                print("【処理が複雑すぎます】")
-                print("="*60)
                 print(f"\n{user_message}")
-                print("\n" + "="*60)
-                print("もう一度、シンプルな内容でお試しください。")
                 print("="*60 + "\n")
+                break
 
 
             except RuntimeError as e:
                 # その他のRuntimeError
-                self._error_handler.log_error(
-                    "RuntimeError",
-                    f"その他のエラーが発生しました: {str(e)}"
+                user_message = self._error_handler.handle_runtime_error(
+                    error=e,
+                    agent_name="reception_agent",
+                    context={"session_id": self._session_id}
                 )
-                print(f"\nエラーが発生しました。もう一度お試しください。\n")
+                print("\n" + "="*60)
+                print(f"\n{user_message}\n")
+                print("="*60 + "\n")
+                break
 
             except Exception as e:
                 # 予期しないエラー
-                self._error_handler.log_error(
-                    "UnexpectedError",
-                    f"予期しないエラーが発生しました: {str(e)}",
-                    exc_info=True
+                user_message = self._error_handler.handle_unexpected_error(
+                    error=e,
+                    agent_name="reception_agent",
+                    context={"session_id": self._session_id}
                 )
-                print(f"\nエラーが発生しました。もう一度お試しください。\n")
+                print("\n" + "="*60)
+                print(f"\n{user_message}\n")
+                print("="*60 + "\n")
+                break

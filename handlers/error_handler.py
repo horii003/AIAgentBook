@@ -30,7 +30,6 @@ class LoopLimitError(RuntimeError):
         )
         super().__init__(message)
 
-
 class ErrorHandler:
     """エラーハンドリング + ログ出力ヘルパー関数クラス"""
     
@@ -120,6 +119,31 @@ class ErrorHandler:
 
 
 #エラーハンドリングを定義
+    def rule_load_error(self, error: Exception,  agent_name: str, context: Optional[dict] = None) -> str:
+        """
+        エージェントのルールの取り込みエラー
+        
+        Args:
+            error: エラーオブジェクト
+            context: エラーコンテキスト
+        
+        Returns:
+            str: ユーザー向けエラーメッセージ
+        """
+         # エラーメッセージを作成
+        error_message = f"[{agent_name}]のルールの読み込みに失敗しました: {str(error)}"
+        self.log_error("RuleLoadError", error_message, context)
+        
+        user_message = """
+        専門エージェントの呼び出しに失敗しました。
+        以下を確認してください
+        1,ナレッジフォルダやルールファイルが存在しているか。
+        2,ルール内の関数が適切に定義されているか
+        """
+        
+        return user_message.strip()
+    
+
 
     def handle_bedrock_error(self, error: Exception, context: Optional[dict] = None) -> str:
         """
@@ -159,8 +183,8 @@ class ErrorHandler:
         Returns:
             str: ユーザー向けエラーメッセージ
         """
-        # ログ出力
-        self.log_error("FareDataLoadError", str(error), context)
+        # ログ出力（スタックトレースを含める）
+        self.log_error("FareDataLoadError", str(error), context, exc_info=True)
         
         # メッセージ生成
         if isinstance(error, FileNotFoundError):
@@ -170,14 +194,14 @@ class ErrorHandler:
             - train_fares.json（電車運賃データ）
             - fixed_fares.json（バス、タクシー、飛行機の固定運賃）
 
-            システムを終了します。
+            交通費を計算できないため、システムを終了してください。
             """
         else:
             user_message = f"""
             運賃データの読み込み中にエラーが発生しました。
             エラー詳細: {str(error)}
             データファイルの形式が正しいか確認してください。
-            システムを終了します。
+            交通費を計算できないため、システムを終了してください。
             """
 
         return user_message.strip()
@@ -195,7 +219,8 @@ class ErrorHandler:
             str: ユーザー向けエラーメッセージ
         """
         error_message = f"交通費の計算に失敗しました: {str(error)}"
-        self.log_error("CalculationError", error_message, context)
+
+        self.log_error("CalculationError", error_message, context, exc_info=True)
         
         user_message = f"""
                 交通費の計算中にエラーが発生しました。
@@ -254,7 +279,7 @@ class ErrorHandler:
         error_message = f"入力データの検証に失敗しました: {str(error)}"
 
         #ログ出力
-        self.log_error("ValidationError", error_message, context)
+        self.log_error("ValidationError", error_message, context, exc_info=True)
         
         #ユーザー向けメッセージ作成
         user_message = f"""
@@ -266,6 +291,25 @@ class ErrorHandler:
         return user_message.strip()
     
     
+    def handle_keyboard_interrupt(self, context: Optional[dict] = None) -> str:
+        """
+        キーボード中断（Ctrl+C）の処理
+        
+        Args:
+            context: エラーコンテキスト
+        
+        Returns:
+            str: ユーザー向けメッセージ
+        """
+        # ログ出力
+        self.log_info("ユーザーによる中断", context)
+        
+        # ユーザー向けメッセージ
+        user_message = "システムを終了します。"
+        
+        return user_message
+    
+    
     def handle_loop_limit_error(self, error: LoopLimitError, context: Optional[dict] = None) -> str:
         """
         エージェントループ制限エラーの処理
@@ -275,29 +319,97 @@ class ErrorHandler:
             context: エラーコンテキスト
         
         Returns:
-            str: ユーザー向けエラーメッセージ
+            str: 構造化されたエラーレスポンス
         """
-        # ログ出力
-        self.log_error(
-            "LoopLimitError",
-            f"エージェント '{error.agent_name}' がループ制限に到達: {error.current_iteration}/{error.max_iterations}",
-            context
-        )
+        # エラーメッセージを作成
+        error_message = f"エージェント '{error.agent_name}' がループ制限に到達: {error.current_iteration}/{error.max_iterations}"
         
-        user_message = """
+        # ログ出力
+        self.log_error("LoopLimitError", error_message, context)
+        
+        # エージェント名に応じた具体例を生成
+        if "交通費" in error.agent_name:
+            specific_example = "複数の経路を一度に申請する場合は、1経路ずつ申請してください"
+        elif "経費精算" in error.agent_name or "領収書" in error.agent_name:
+            specific_example = "複数の領収書を一度に申請する場合は、1枚ずつ申請してください"
+        else:
+            specific_example = "複数の申請を一度に行う場合は、1つずつ申請してください"
+        
+        # 構造化されたエラーレスポンス
+        user_message = f"""
         申し訳ございません。処理が複雑すぎて完了できませんでした。
+        エージェントループが発生しているようです。
         
         以下のいずれかをお試しください：
         1. タスクをより小さな単位に分割してください
-        例：複数の申請を一度に行う場合は、1つずつ申請してください
+        例：{specific_example}
         
         2. より具体的な指示を提供してください
         例：「交通費を申請したい」→「2024年1月10日の東京から大阪への新幹線代を申請したい」
         
         3. 不要な情報を削除してください
         例：申請に関係のない質問や情報は別途お尋ねください
+
+        シンプルな内容で再度お試しください。
+
+        """
         
-        もう一度、シンプルな内容でお試しください。
+        return user_message.strip()
+    
+    
+    def handle_runtime_error(self, error: Exception, agent_name: str, context: Optional[dict] = None) -> str:
+        """
+        RuntimeErrorの処理
+        
+        Args:
+            error: エラーオブジェクト
+            agent_name: エージェント名
+            context: エラーコンテキスト
+        
+        Returns:
+            str: ユーザー向けエラーメッセージ
+        """
+        # エラーメッセージを作成
+        error_message = f"[{agent_name}] RuntimeError: {str(error)[:100]}"
+        
+        # ログ出力
+        self.log_warning(error_message, context)
+        
+        # 構造化されたエラーレスポンス
+        user_message = """
+        【エラー】
+        \n申し訳ございません。処理中にエラーが発生しました。
+        \n問題が解決しない場合は、システム管理者にお問い合わせください
+        \nもう一度お試しください。"""
+        
+        return user_message.strip()
+    
+    
+    def handle_unexpected_error(self, error: Exception, agent_name: str, context: Optional[dict] = None) -> str:
+        """
+        予期しないエラーの処理
+        
+        Args:
+            error: エラーオブジェクト
+            agent_name: エージェント名
+            context: エラーコンテキスト
+        
+        Returns:
+            str: ユーザー向けエラーメッセージ
+        """
+        # エラーメッセージを作成
+        error_message = f"[{agent_name}] 予期しないエラー: {str(error)}"
+        
+        # ログ出力（スタックトレース付き）
+        self.log_error("UnexpectedError", error_message, context, exc_info=True)
+        
+        # 構造化されたエラーレスポンス
+        user_message = """
+        【予期しないエラー】
+        申し訳ございません。予期しないエラーが発生しました。
+        \nシステムを再起動してください。
+        \nまた、問題が解決しない場合は、以下の情報をシステム管理者に伝えてください
+        \nもう一度お試しください。
         """
         
         return user_message.strip()

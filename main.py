@@ -55,66 +55,51 @@ def main():
         error_handler.log_info("システム正常終了")
     
     except KeyboardInterrupt:
-        print("\n\nシステムを終了します。")
-        error_handler.log_info("ユーザーによる中断")
+        # キーボード中断（Ctrl+C）
+        user_message = error_handler.handle_keyboard_interrupt()
+        
+        print("\n" + "=" * 60)
+        print(f"\n{user_message}\n")
+        print("=" * 60)
         sys.exit(0)
     
-
-    except LoopLimitError as e:
-        # ループ制限エラーの処理
-        user_message = error_handler.handle_loop_limit_error(
-            e, 
-            {"error_type": "LoopLimitError"}
-        )
-        print(user_message)
-        sys.exit(1)
-
-
     except RuntimeError as e:
         # その他のRuntimeError
-        error_handler.log_error(
-            "RuntimeError", 
-            str(e), 
-            {"error_type": "RuntimeError"}, 
-            exc_info=True
+        user_message = error_handler.handle_runtime_error(
+            error=e,
+            agent_name="main",
+            context={"error_type": "RuntimeError"}
         )
-
+        
         print("\n" + "=" * 60)
-        print("【エラー】")
-        print("=" * 60)
-        print("\n予期しないエラーが発生しました。")
-        print("システムを再起動してください。")
-        print("\n問題が解決しない場合は、システム管理者にお問い合わせください。")
+        print(f"\n{user_message}\n")
         print("=" * 60)
         sys.exit(1)
     
     
     except ConnectionError as e:
         # 接続エラー
-        user_message = error_handler.handle_bedrock_error(e, {"error_type": "ConnectionError"})
-        print(user_message)
+        user_message = error_handler.handle_bedrock_error(
+            e, 
+            {"error_type": "ConnectionError"}
+        )
+        print("\n" + "=" * 60)
+        print(f"\n{user_message}\n")
+        print("=" * 60)
         sys.exit(1)
     
     
     except Exception as e:
         # その他のすべてのエラー
-        error_type = type(e).__name__
-        error_handler.log_error(
-            "UnexpectedError", 
-            str(e), 
-            {"error_type": error_type}, 
-            exc_info=True
+        user_message = error_handler.handle_unexpected_error(
+            e,
+            agent_name="main",
+            context={"error_type": type(e).__name__}
         )
         
         print("\n" + "=" * 60)
-        print("【予期しないエラー】")
+        print(f"\n{user_message}\n")
         print("=" * 60)
-        print("\n予期しないエラーが発生しました。")
-        print("システムを再起動してください。")
-        print("\n問題が解決しない場合は、以下の情報をシステム管理者に伝えてください：")
-        print(f"エラータイプ: {error_type}")
-        print("=" * 60)
-        
         sys.exit(1)
 
 
