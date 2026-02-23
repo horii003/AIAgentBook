@@ -119,32 +119,6 @@ class ErrorHandler:
 
 
 #エラーハンドリングを定義
-    def rule_load_error(self, error: Exception,  agent_name: str, context: Optional[dict] = None) -> str:
-        """
-        エージェントのルールの取り込みエラー
-        
-        Args:
-            error: エラーオブジェクト
-            context: エラーコンテキスト
-        
-        Returns:
-            str: ユーザー向けエラーメッセージ
-        """
-         # エラーメッセージを作成
-        error_message = f"[{agent_name}]のルールの読み込みに失敗しました: {str(error)}"
-        self.log_error("RuleLoadError", error_message, context)
-        
-        user_message = """
-        専門エージェントの呼び出しに失敗しました。
-        以下を確認してください
-        1,ナレッジフォルダやルールファイルが存在しているか。
-        2,ルール内の関数が適切に定義されているか
-        """
-        
-        return user_message.strip()
-    
-
-
     def handle_bedrock_error(self, error: Exception, context: Optional[dict] = None) -> str:
         """
         Bedrock接続エラーの処理
