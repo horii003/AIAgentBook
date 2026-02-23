@@ -4,7 +4,7 @@
 """
 
 
-def get_travel_rules(today: str, three_months_ago: str) -> str:
+def get_transportation_rules(today: str, three_months_ago: str) -> str:
     """
     交通費申請ルールテキストを取得
     

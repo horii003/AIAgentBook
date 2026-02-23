@@ -1,8 +1,8 @@
 """交通費精算申請エージェントのシステムプロンプト"""
 from datetime import datetime, timedelta
-from agent_knowledge.travel_policies import get_travel_rules
+from agent_knowledge.transportation_policies import get_transportation_rules
 
-def _get_travel_system_prompt() -> str:
+def _get_transportation_expense_system_prompt() -> str:
     """現在日付を含むシステムプロンプトを動的に生成"""
     today = datetime.now()
     three_months_ago = today - timedelta(days=90)
@@ -12,7 +12,7 @@ def _get_travel_system_prompt() -> str:
     three_months_ago_str = three_months_ago.strftime('%Y-%m-%d')
     
     # 外部ルールを読み込む
-    rules_text = get_travel_rules(today_str, three_months_ago_str)
+    rules_text = get_transportation_rules(today_str, three_months_ago_str)
 
     return f"""
     あなたは交通費精算申請エージェントです。
@@ -29,7 +29,7 @@ def _get_travel_system_prompt() -> str:
     - calculate_fareツールを利用して、dataフォルダ内の各交通手段の経路間の費用を確認して、交通費を計算する
 
     2. Excel申請書の生成
-    - travel_excel_generatorツールで申請書を生成
+    - transportation_excel_generatorツールで申請書を生成
 
     {rules_text}
     
@@ -40,7 +40,7 @@ def _get_travel_system_prompt() -> str:
     3. 区間ごとに「交通費申請ルール」に基づいてチェックする
     4. 計算結果を区間ごとにユーザーに確認する
     5. 次の区間の有無を必ず確認して、ある場合は次の区間も計算をする
-    6. travel_excel_generatorツールを実行する
+    6. transportation_excel_generatorツールを実行する
 
     ## 重要な注意事項
     - 各区間の情報を収集する際は、出発地、目的地、日付、交通手段の４項目を確認してください
