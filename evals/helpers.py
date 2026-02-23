@@ -87,7 +87,7 @@ def create_reception_agent(session_id):
     Args:
         session_id: セッションID（テレメトリの trace_attributes に設定）
     """
-    from agents.travel_agent import travel_agent
+    from agents.transportation_expense_agent import transportation_expense_agent
     from agents.receipt_expense_agent import receipt_expense_agent
     from config.model_config import ModelConfig
     from prompt.prompt_reception import RECEPTION_SYSTEM_PROMPT
@@ -96,7 +96,7 @@ def create_reception_agent(session_id):
     return Agent(
         model=ModelConfig.get_model(),
         system_prompt=RECEPTION_SYSTEM_PROMPT,
-        tools=[travel_agent, receipt_expense_agent],
+        tools=[transportation_expense_agent, receipt_expense_agent],
         conversation_manager=SlidingWindowConversationManager(
             window_size=30,
             should_truncate_results=True,

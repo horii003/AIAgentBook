@@ -1,7 +1,7 @@
 """ToolSelectionAccuracyEvaluator による受付エージェントのツール選択評価
 
 受付エージェント（reception_agent）が、ユーザーの要求に応じて
-適切なツール（travel_agent / receipt_expense_agent）を選択しているかを
+適切なツール（transportation_expense_agent / receipt_expense_agent）を選択しているかを
 各ツール呼び出し単位で二値（Yes=1.0 / No=0.0）評価します。
 
 評価レベル: TOOL_LEVEL
@@ -66,8 +66,8 @@ EVAL_CASES = [
         name="travel_tooltest",
         input="交通費の申請をお願いします。2026年2月22日に東京から渋谷まで電車で移動しました。",
         metadata={
-            "task_description": "交通費精算を依頼した際に、適切にtravel_agentを選択するかテストする",
-            "expected_tool": "travel_agent",
+            "task_description": "交通費精算を依頼した際に、適切にtransportation_expense_agentを選択するかテストする",
+            "expected_tool": "transportation_expense_agent",
         },
     ),
     Case(
