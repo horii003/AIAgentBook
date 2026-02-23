@@ -32,7 +32,7 @@ def _get_transportation_expense_agent(session_id: str) -> Agent:
     
     # ループ制御フックの作成
     loop_control_hook = LoopControlHook(
-        max_iterations=1,  # 専門エージェントは特定タスクに集中するため標準的な回数
+        max_iterations=10,  # 専門エージェントは特定タスクに集中するため標準的な回数
         agent_name="交通費精算申請エージェント"
     )
 
