@@ -275,7 +275,6 @@ def receipt_excel_generator(
     """
     経費精算申請エージェントが利用します。経費精算申請書を生成します。
 
-    
     このツールは領収書データからExcel申請書を作成します。
     金額が30,000円を超える場合はエラーを返します。
     申請者名はinvocation_stateから自動的に取得されます。
@@ -341,7 +340,7 @@ def receipt_excel_generator(
                 field = ".".join(str(loc) for loc in error["loc"])
                 error_messages.append(f"{field}: {error['msg']}")
             
-            # handle_validation_errorでログ出力
+            # ログ出力
             _error_handler.handle_validation_error(
                 e,
                 context={
@@ -542,7 +541,7 @@ def travel_excel_generator(
                     field = ".".join(str(loc) for loc in error["loc"])
                     error_messages.append(f"{field}: {error['msg']}")
 
-                # handle_validation_errorでログ出力
+                # ログ出力
                 _error_handler.handle_validation_error(
                     e,
                     context={"route_index": i+1, "route_data": route}

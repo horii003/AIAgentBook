@@ -5,7 +5,7 @@ import logging
 import warnings
 from dotenv import load_dotenv
 from agents.reception_agent import ReceptionAgent
-from handlers.error_handler import ErrorHandler, LoopLimitError
+from handlers.error_handler import ErrorHandler
 
 
 # .envファイルを読み込み
@@ -40,10 +40,10 @@ warnings.filterwarnings("ignore")
 # ========== 以下、メイン関数==========
 def main():
     # エラーハンドラーの初期化
-    error_handler = ErrorHandler()
+    _error_handler = ErrorHandler()
     
     try:
-        error_handler.log_info("システム起動")
+        _error_handler.log_info("システム起動")
 
         # エージェントの初期化
         agent = ReceptionAgent()
@@ -52,11 +52,11 @@ def main():
         agent.run()
 
         # エージェントの終了
-        error_handler.log_info("システム正常終了")
+        _error_handler.log_info("システム正常終了")
     
     except KeyboardInterrupt:
         # キーボード中断（Ctrl+C）
-        user_message = error_handler.handle_keyboard_interrupt()
+        user_message = _error_handler.handle_keyboard_interrupt()
         
         print("\n" + "=" * 60)
         print(f"\n{user_message}\n")
@@ -65,7 +65,7 @@ def main():
     
     except RuntimeError as e:
         # その他のRuntimeError
-        user_message = error_handler.handle_runtime_error(
+        user_message = _error_handler.handle_runtime_error(
             error=e,
             agent_name="main",
             context={"error_type": "RuntimeError"}
@@ -79,7 +79,7 @@ def main():
     
     except ConnectionError as e:
         # 接続エラー
-        user_message = error_handler.handle_bedrock_error(
+        user_message = _error_handler.handle_bedrock_error(
             e, 
             {"error_type": "ConnectionError"}
         )
@@ -88,10 +88,9 @@ def main():
         print("=" * 60)
         sys.exit(1)
     
-    
     except Exception as e:
         # その他のすべてのエラー
-        user_message = error_handler.handle_unexpected_error(
+        user_message = _error_handler.handle_unexpected_error(
             e,
             agent_name="main",
             context={"error_type": type(e).__name__}

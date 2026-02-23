@@ -78,10 +78,10 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
         str: エージェントからの応答
     """
     # ErrorHandlerのインスタンスを作成
-    error_handler = ErrorHandler()
+    _error_handler = ErrorHandler()
     
     # ツール呼び出しをログに記録
-    error_handler.log_info("[receipt_expense_agent] ツールが呼び出されました")
+    _error_handler.log_info("[receipt_expense_agent] ツールが呼び出されました")
 
     try:
         # invocation_stateは受付エージェント側でバリデーション済み
@@ -102,7 +102,7 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
     
     except LoopLimitError as e:
         # ループ制限エラー
-        return error_handler.handle_loop_limit_error(
+        return _error_handler.handle_loop_limit_error(
             e,
             context={
                 "agent": "receipt_expense_agent",
@@ -112,7 +112,7 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
     
     except RuntimeError as e:
         # RuntimeError
-        return error_handler.handle_runtime_error(
+        return _error_handler.handle_runtime_error(
             e,
             agent_name="receipt_expense_agent",
             context={
@@ -122,7 +122,7 @@ def receipt_expense_agent(query: str, tool_context: ToolContext) -> str:
     
     except Exception as e:
         # 予期しないエラー
-        return error_handler.handle_unexpected_error(
+        return _error_handler.handle_unexpected_error(
             e,
             agent_name="receipt_expense_agent",
             context={

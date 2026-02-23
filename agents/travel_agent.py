@@ -35,7 +35,7 @@ def _get_travel_agent(session_id: str) -> Agent:
         max_iterations=10,  # 専門エージェントは特定タスクに集中するため標準的な回数
         agent_name="交通費精算申請エージェント"
     )
-    
+
     # エージェントの初期化
     agent = Agent(
         model=ModelConfig.get_model(),
@@ -79,11 +79,11 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
     Returns:
         str: エージェントからの応答
     """
-    # ErrorHandlerのインスタンスを作成
-    error_handler = ErrorHandler()
+    # ErrorHandlerの初期化
+    _error_handler = ErrorHandler()
     
     # ツール呼び出しをログに記録
-    error_handler.log_info("[travel_agent] ツールが呼び出されました")
+    _error_handler.log_info("[travel_agent] ツールが呼び出されました")
 
     try:
         # invocation_stateは受付エージェント側でバリデーション済み
@@ -103,8 +103,8 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
         return str(response)
     
     except LoopLimitError as e:
-        # ループ制限エラー：ErrorHandlerで処理
-        return error_handler.handle_loop_limit_error(
+        # ループ制限エラー
+        return _error_handler.handle_loop_limit_error(
             e,
             context={
                 "agent": "travel_agent",
@@ -114,7 +114,7 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
     
     except RuntimeError as e:
         # RuntimeError
-        return error_handler.handle_runtime_error(
+        return _error_handler.handle_runtime_error(
             e,
             agent_name="travel_agent",
             context={
@@ -124,7 +124,7 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
     
     except Exception as e:
         # 予期しないエラー
-        return error_handler.handle_unexpected_error(
+        return _error_handler.handle_unexpected_error(
             e,
             agent_name="travel_agent",
             context={
