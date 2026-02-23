@@ -3,7 +3,7 @@ Excel申請書生成ツール
 
 Excel形式の経費精算申請書を生成する。
 - 「経費精算申請エージェント(receipt_expense_agent)」：receipt_excel_generatorツールを利用
-- 「交通費精算申請エージェント(travel_agent)」：travel_excel_generatorツールを利用
+- 「交通費精算申請エージェント(transportation_expense_agent)」：transportation_excel_generatorツールを利用
 
 """
 
@@ -472,7 +472,7 @@ def receipt_excel_generator(
 
 # 交通費精算申請エージェント用の申請書作成ツール
 @tool(context=True)
-def travel_excel_generator(
+def transportation_excel_generator(
     routes: List[dict],
     tool_context: ToolContext
 ) -> dict:
@@ -504,7 +504,7 @@ def travel_excel_generator(
     """
     # ツール呼び出しログ
     _error_handler.log_info(
-        "travel_excel_generatorツールが呼び出されました",
+        "transportation_excel_generatorツールが呼び出されました",
         context={"routes_count": len(routes) if routes else 0}
     )
     
@@ -710,4 +710,5 @@ def travel_excel_generator(
             "total_cost": 0,
             "message": f"エラー: 申請書の生成に失敗しました - {str(e)}"
         }
+
 

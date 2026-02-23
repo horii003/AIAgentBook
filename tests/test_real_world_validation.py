@@ -1,6 +1,6 @@
 """実際のツールでのPydanticバリデーションの動作テスト"""
 import pytest
-from tools.excel_generator import travel_excel_generator
+from tools.excel_generator import transportation_excel_generator
 from tools.fare_tools import load_fare_data, calculate_fare
 from pydantic import ValidationError
 
@@ -21,7 +21,7 @@ class TestRealWorldExcelGeneratorValidation:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is True
         assert result["total_cost"] == 200.0
@@ -46,7 +46,7 @@ class TestRealWorldExcelGeneratorValidation:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is False
         assert "データが不正" in result["message"]
@@ -66,7 +66,7 @@ class TestRealWorldExcelGeneratorValidation:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is False
         assert "destination" in result["message"]
@@ -86,7 +86,7 @@ class TestRealWorldExcelGeneratorValidation:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is False
         assert "YYYY-MM-DD" in result["message"]
@@ -105,7 +105,7 @@ class TestRealWorldExcelGeneratorValidation:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is False
         assert "greater than or equal to 0" in result["message"]
@@ -124,7 +124,7 @@ class TestRealWorldExcelGeneratorValidation:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is True
         assert result["total_cost"] == 200.0
@@ -157,7 +157,7 @@ class TestRealWorldExcelGeneratorValidation:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is False
         assert "経路2" in result["message"]  # 2番目の経路でエラー
@@ -227,7 +227,7 @@ class TestEdgeCases:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is False
         assert "departure" in result["message"]
@@ -247,7 +247,7 @@ class TestEdgeCases:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         # Pydanticは空白を許可するが、実際のビジネスロジックで検証可能
         print("\n⚠️  空白のみのフィールド")
@@ -266,7 +266,7 @@ class TestEdgeCases:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         # RouteInputには上限チェックがないため成功する
         # RouteDataには上限チェックがある
@@ -291,7 +291,7 @@ class TestEdgeCases:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is True
         assert result["total_cost"] == 0.0
@@ -315,7 +315,7 @@ class TestEdgeCases:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is True
         print("\n✅ Unicode文字（絵文字）を含むロケーション名が許可される")
@@ -344,7 +344,7 @@ class TestComparisonWithManualValidation:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is False
         assert "unable to parse" in result["message"] or "valid number" in result["message"]
@@ -364,7 +364,7 @@ class TestComparisonWithManualValidation:
             }
         ]
         
-        result = travel_excel_generator(routes=routes, user_id="test001")
+        result = transportation_excel_generator(routes=routes, user_id="test001")
         
         assert result["success"] is False
         # Pydanticは複数のエラーを一度に報告する
@@ -376,3 +376,5 @@ class TestComparisonWithManualValidation:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+

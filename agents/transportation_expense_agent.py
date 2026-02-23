@@ -3,17 +3,17 @@ from strands import Agent, tool, ToolContext
 from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from tools.fare_tools import load_fare_data, calculate_fare
-from tools.excel_generator import travel_excel_generator
+from tools.excel_generator import transportation_excel_generator
 from session.session_manager import SessionManagerFactory
 from handlers.human_approval_hook import HumanApprovalHook
 from handlers.error_handler import LoopLimitError, ErrorHandler
-from prompt.prompt_travel import _get_travel_system_prompt
+from prompt.prompt_transportation_expense import _get_transportation_expense_system_prompt
 from handlers.loop_control_hook import LoopControlHook
 from config.model_config import ModelConfig
 
 
 #エージェントの初期化
-def _get_travel_agent(session_id: str) -> Agent:
+def _get_transportation_expense_agent(session_id: str) -> Agent:
     """
     交通費精算申請エージェントのインスタンスを作成
     
@@ -32,24 +32,24 @@ def _get_travel_agent(session_id: str) -> Agent:
     
     # ループ制御フックの作成
     loop_control_hook = LoopControlHook(
-        max_iterations=10,  # 専門エージェントは特定タスクに集中するため標準的な回数
+        max_iterations=1,  # 専門エージェントは特定タスクに集中するため標準的な回数
         agent_name="交通費精算申請エージェント"
     )
 
     # エージェントの初期化
     agent = Agent(
         model=ModelConfig.get_model(),
-        system_prompt=_get_travel_system_prompt(),#別モジュールから取得
+        system_prompt=_get_transportation_expense_system_prompt(),#別モジュールから取得
         tools=[
             calculate_fare,
-            travel_excel_generator
+            transportation_excel_generator
         ],
         conversation_manager=SlidingWindowConversationManager(
             window_size=20,
             should_truncate_results=True,
             per_turn=False
         ),
-        agent_id="travel_agent",
+        agent_id="transportation_expense_agent",
         name="交通費精算申請エージェント",
         description="ユーザーから移動情報を収集し、交通費を計算して申請書を作成します",
         callback_handler=None,  # ストリーミング出力を無効化
@@ -66,7 +66,7 @@ def _get_travel_agent(session_id: str) -> Agent:
 
 #Agent as Tools
 @tool(context=True)
-def travel_agent(query: str, tool_context: ToolContext) -> str:
+def transportation_expense_agent(query: str, tool_context: ToolContext) -> str:
     """
     交通費精算申請ツール
     
@@ -83,14 +83,14 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
     _error_handler = ErrorHandler()
     
     # ツール呼び出しをログに記録
-    _error_handler.log_info("[travel_agent] ツールが呼び出されました")
+    _error_handler.log_info("[transportation_expense_agent] ツールが呼び出されました")
 
     try:
         # invocation_stateは受付エージェント側でバリデーション済み
         state = tool_context.invocation_state
         
         # エージェントインスタンスを作成（session_managerが会話履歴を管理）
-        agent = _get_travel_agent(session_id=state["session_id"])
+        agent = _get_transportation_expense_agent(session_id=state["session_id"])
         
         # invocation_stateを渡してエージェント実行
         invocation_state = {
@@ -107,7 +107,7 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
         return _error_handler.handle_loop_limit_error(
             e,
             context={
-                "agent": "travel_agent",
+                "agent": "transportation_expense_agent",
                 "query": query[:100]  # ユーザー入力の最初の100文字
             }
         )
@@ -116,7 +116,7 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
         # RuntimeError
         return _error_handler.handle_runtime_error(
             e,
-            agent_name="travel_agent",
+            agent_name="transportation_expense_agent",
             context={
                 "query": query[:100]
             }
@@ -126,9 +126,10 @@ def travel_agent(query: str, tool_context: ToolContext) -> str:
         # 予期しないエラー
         return _error_handler.handle_unexpected_error(
             e,
-            agent_name="travel_agent",
+            agent_name="transportation_expense_agent",
             context={
                 "query": query[:100]
             }
         )
+
 

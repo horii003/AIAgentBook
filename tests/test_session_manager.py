@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from session.session_manager import SessionManagerFactory
-from agents.travel_agent import _get_travel_agent, reset_travel_agent
+from agents.transportation_expense_agent import _get_transportation_expense_agent
 from agents.receipt_expense_agent import _get_receipt_expense_agent, reset_receipt_expense_agent
 
 
@@ -59,44 +59,42 @@ class TestSessionManagerFactory:
         assert f"session_{session_id}" in session_path
 
 
-class TestSessionManagerWithTravelAgent:
-    """TravelAgentとSessionManagerの統合テスト"""
+class TestSessionManagerWithTransportationExpenseAgent:
+    """TransportationExpenseAgentとSessionManagerの統合テスト"""
     
     @pytest.fixture(autouse=True)
     def setup_and_teardown(self):
         """各テストの前後でクリーンアップ"""
-        # テスト前: エージェントをリセット
-        reset_travel_agent()
+        # テスト前: エージェントをリセット（transportation_expense_agentにはreset関数なし）
         
         yield
         
-        # テスト後: エージェントをリセット
-        reset_travel_agent()
+        # テスト後: エージェントをリセット（transportation_expense_agentにはreset関数なし）
         
         # テストセッションのクリーンアップ
-        test_sessions = ["test_travel_session_001", "test_travel_session_002"]
+        test_sessions = ["test_transportation_expense_session_001", "test_transportation_expense_session_002"]
         for session_id in test_sessions:
             session_path = SessionManagerFactory.get_session_path(session_id)
             if os.path.exists(session_path):
                 shutil.rmtree(session_path)
     
-    def test_travel_agent_without_session_manager(self):
+    def test_transportation_expense_agent_without_session_manager(self):
         """セッションマネージャーなしでのエージェント作成テスト"""
-        agent = _get_travel_agent(session_id=None)
+        agent = _get_transportation_expense_agent(session_id=None)
         
         assert agent is not None
-        assert agent.agent_id == "travel_agent"
+        assert agent.agent_id == "transportation_expense_agent"
         # セッションマネージャーがない場合（内部属性なのでチェックしない）
         print(f"\n✅ セッションマネージャーなしでエージェント作成成功")
     
-    def test_travel_agent_with_session_manager(self):
+    def test_transportation_expense_agent_with_session_manager(self):
         """セッションマネージャーありでのエージェント作成テスト"""
-        session_id = "test_travel_session_001"
+        session_id = "test_transportation_expense_session_001"
         
-        agent = _get_travel_agent(session_id=session_id)
+        agent = _get_transportation_expense_agent(session_id=session_id)
         
         assert agent is not None
-        assert agent.agent_id == "travel_agent"
+        assert agent.agent_id == "transportation_expense_agent"
         
         # セッションディレクトリが作成されている
         session_path = SessionManagerFactory.get_session_path(session_id)
@@ -107,10 +105,10 @@ class TestSessionManagerWithTravelAgent:
     
     def test_session_persistence(self):
         """セッションの永続化テスト"""
-        session_id = "test_travel_session_002"
+        session_id = "test_transportation_expense_session_002"
         
         # 1回目: エージェントを作成して実行
-        agent1 = _get_travel_agent(session_id=session_id)
+        agent1 = _get_transportation_expense_agent(session_id=session_id)
         response1 = agent1("こんにちは")
         
         assert response1 is not None
@@ -119,7 +117,7 @@ class TestSessionManagerWithTravelAgent:
         
         # セッションファイルが作成されていることを確認
         session_path = SessionManagerFactory.get_session_path(session_id)
-        agent_path = os.path.join(session_path, "agents", "agent_travel_agent")
+        agent_path = os.path.join(session_path, "agents", "agent_transportation_expense_agent")
         assert os.path.exists(agent_path)
         
         # agent.jsonが存在することを確認
@@ -141,18 +139,18 @@ class TestSessionManagerWithTravelAgent:
     
     def test_session_restoration(self):
         """セッションの復元テスト"""
-        session_id = "test_travel_session_002"
+        session_id = "test_transportation_expense_session_002"
         
         # 1回目: エージェントを作成して実行
-        agent1 = _get_travel_agent(session_id=session_id)
+        agent1 = _get_transportation_expense_agent(session_id=session_id)
         response1 = agent1("こんにちは")
         initial_message_count = len(agent1.messages)
         
         # エージェントをリセット（メモリから削除）
-        reset_travel_agent()
+        # reset関数は不要（transportation_expense_agentには存在しない）
         
         # 2回目: 同じセッションIDでエージェントを作成
-        agent2 = _get_travel_agent(session_id=session_id)
+        agent2 = _get_transportation_expense_agent(session_id=session_id)
         
         # メッセージが復元されていることを確認
         assert len(agent2.messages) == initial_message_count
@@ -240,11 +238,11 @@ class TestMultipleSessionsIsolation:
     @pytest.fixture(autouse=True)
     def setup_and_teardown(self):
         """各テストの前後でクリーンアップ"""
-        reset_travel_agent()
+        # transportation_expense_agentにはreset関数なし
         
         yield
         
-        reset_travel_agent()
+        # transportation_expense_agentにはreset関数なし
         
         # テストセッションのクリーンアップ
         test_sessions = ["test_user_a", "test_user_b"]
@@ -263,7 +261,7 @@ class TestMultipleSessionsIsolation:
         session_id_b = "test_user_b"
         
         # ユーザーAのセッション
-        agent_a = _get_travel_agent(session_id=session_id_a)
+        agent_a = _get_transportation_expense_agent(session_id=session_id_a)
         response_a = agent_a("ユーザーAです")
         
         # 現在の実装では、同じグローバル変数を使用するため、
@@ -273,7 +271,7 @@ class TestMultipleSessionsIsolation:
         print(f"\n⚠️  注意: 現在の実装ではシングルトンパターンのため、")
         print(f"   複数セッションの完全な分離はサポートされていません。")
         print(f"   マルチユーザー対応が必要な場合は、")
-        print(f"   travel_agent_improved.py の実装を参照してください。")
+        print(f"   transportation_expense_agent_improved.py の実装を参照してください。")
 
 
 if __name__ == "__main__":

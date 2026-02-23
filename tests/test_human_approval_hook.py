@@ -113,8 +113,8 @@ class TestHumanApprovalHook:
         assert "修正要望" in event.cancel_tool
         assert "金額を2000円に修正してください" in event.cancel_tool
     
-    def test_request_approval_for_travel_excel_generator_approved(self):
-        """travel_excel_generatorツールの承認テスト"""
+    def test_request_approval_for_transportation_excel_generator_approved(self):
+        """transportation_expense_agentのtransportation_excel_generatorツールの承認テスト"""
         # モックコールバック（承認）
         def mock_callback(tool_name, tool_params):
             return True, ""
@@ -124,7 +124,7 @@ class TestHumanApprovalHook:
         # モックイベントの作成
         event = Mock(spec=BeforeToolCallEvent)
         event.tool_use = {
-            "name": "travel_excel_generator",
+            "name": "transportation_excel_generator",
             "input": {
                 "routes": [
                     {
@@ -173,3 +173,4 @@ class TestHumanApprovalHook:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+

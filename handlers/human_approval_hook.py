@@ -49,7 +49,7 @@ class HumanApprovalHook(HookProvider):
         tool_name = event.tool_use["name"]
         
         # excel_generatorツールのみを対象とする
-        if not (tool_name == "receipt_excel_generator" or tool_name == "travel_excel_generator"):
+        if not (tool_name == "receipt_excel_generator" or tool_name == "transportation_excel_generator"):
             return
         
         tool_params = event.tool_use.get("input", {})
@@ -127,7 +127,7 @@ class HumanApprovalHook(HookProvider):
             print(f"日付: {tool_params.get('date', 'N/A')}")
             print(f"品目: {', '.join(tool_params.get('items', []))}")
             print(f"経費区分: {tool_params.get('expense_category', 'N/A')}")
-        elif tool_name == "travel_excel_generator":
+        elif tool_name == "transportation_excel_generator":
             routes = tool_params.get('routes', [])
             print(f"経路数: {len(routes)}件")
             total_cost = sum(route.get('cost', 0) for route in routes)
@@ -161,3 +161,4 @@ class HumanApprovalHook(HookProvider):
                 return False, "CANCEL"
             else:
                 print("1、2、または3を入力してください。")
+

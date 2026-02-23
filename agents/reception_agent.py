@@ -12,7 +12,7 @@ from datetime import datetime
 from strands import Agent
 from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
-from agents.travel_agent import travel_agent
+from agents.transportation_expense_agent import transportation_expense_agent
 from agents.receipt_expense_agent import receipt_expense_agent
 from session.session_manager import SessionManagerFactory
 from handlers.error_handler import ErrorHandler, LoopLimitError
@@ -71,7 +71,7 @@ class ReceptionAgent:
         self.agent = Agent(
             model=ModelConfig.get_model(),
             system_prompt=RECEPTION_SYSTEM_PROMPT, #別モジュールから取得
-            tools=[travel_agent, receipt_expense_agent],
+            tools=[transportation_expense_agent, receipt_expense_agent],
             conversation_manager=SlidingWindowConversationManager(
                 window_size=30,  # オーケストレーターは複数エージェントとのやり取りを保持するため大きめ
                 should_truncate_results=True,

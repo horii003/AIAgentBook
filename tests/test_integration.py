@@ -3,10 +3,10 @@ import pytest
 import os
 import json
 from agents.reception_agent import ReceptionAgent
-from agents.travel_agent import travel_agent, reset_travel_agent
+from agents.transportation_expense_agent import transportation_expense_agent
 from agents.receipt_expense_agent import receipt_expense_agent, reset_receipt_expense_agent
 from tools.fare_tools import calculate_fare
-from tools.excel_generator import travel_excel_generator
+from tools.excel_generator import transportation_excel_generator
 
 
 class TestEndToEndWorkflow:
@@ -54,7 +54,7 @@ class TestEndToEndWorkflow:
         })
         
         # 2. 申請書の生成（Excel）
-        result_excel = travel_excel_generator(
+        result_excel = transportation_excel_generator(
             routes=routes,
             user_id="integration_test"
         )
@@ -116,7 +116,7 @@ class TestEndToEndWorkflow:
         })
         
         # 申請書生成
-        result = travel_excel_generator(
+        result = transportation_excel_generator(
             routes=routes,
             user_id="multi_transport_test"
         )
@@ -146,13 +146,12 @@ class TestMultiAgentIntegration:
         assert agent.agent is not None
         # Strands Agentオブジェクトにはtoolsプロパティがないため、初期化のみ確認
     
-    def test_travel_agent_as_tool(self):
-        """travel_agentがツールとして動作するかテスト"""
+    def test_transportation_expense_agent_as_tool(self):
+        """transportation_expense_agentがツールとして動作するかテスト"""
         # 注意: このテストは実際のLLMを呼び出すため、時間がかかります
         
         # 実際のテストコード
-        reset_travel_agent()
-        response = travel_agent("渋谷から東京まで電車で移動しました")
+        response = transportation_expense_agent("渋谷から東京まで電車で移動しました")
         assert response is not None
         assert isinstance(response, str)
         assert len(response) > 0
@@ -168,14 +167,11 @@ class TestMultiAgentIntegration:
     
     def test_agent_reset_functionality(self):
         """エージェントのリセット機能テスト"""
-        # travel_agentのリセット
-        reset_travel_agent()
-        
         # receipt_expense_agentのリセット
         reset_receipt_expense_agent()
         
         # リセット後も再度使用可能であることを確認
-        assert callable(travel_agent)
+        assert callable(transportation_expense_agent)
         assert callable(receipt_expense_agent)
 
 
@@ -207,7 +203,7 @@ class TestErrorHandling:
         
         # 必須キーが不足している場合のテスト
         invalid_routes = [{"departure": "渋谷"}]
-        result = travel_excel_generator(
+        result = transportation_excel_generator(
             routes=invalid_routes,
             user_id="error_test"
         )
@@ -218,7 +214,7 @@ class TestErrorHandling:
     
     def test_empty_routes_handling(self):
         """空の経路データのエラーハンドリングテスト"""
-        result = travel_excel_generator(
+        result = transportation_excel_generator(
             routes=[],
             user_id="empty_test"
         )
@@ -229,3 +225,4 @@ class TestErrorHandling:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
