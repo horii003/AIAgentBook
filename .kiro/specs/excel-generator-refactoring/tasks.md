@@ -2,199 +2,237 @@
 
 ## Overview
 
-このタスクリストは、`tools/excel_generator.py`のリファクタリングを段階的に実装するための計画です。共通機能をヘルパー関数に抽出し、コードの重複を削減しながら、既存のエージェントとの完全な互換性を維持します。
+このタスクリストは、`tools/excel_generator.py`をクラスベース設計にリファクタリングするための実装計画です。現在の約700行のコードには、2つの独立した関数（`receipt_excel_generator`と`transportation_excel_generator`）が存在し、多くの共通コードが重複しています。
 
-各タスクは、前のタスクの成果物を基に構築され、段階的に機能を検証します。テスト関連のサブタスクはオプションとしてマークされており、コア機能の実装を優先できます。
+リファクタリングにより、以下を実現します：
+- コード重複の削減（約40%のコード削減）
+- 保守性の向上（クラスベース設計）
+- テスト容易性の向上（各クラスを独立してテスト可能）
+- 拡張性の向上（新しい申請書タイプを追加しやすい）
+- 後方互換性の維持（既存のエージェントは変更不要）
 
 ## Tasks
 
-- [x] 1. 共通ヘルパー関数の実装
-  - [x] 1.1 申請者名取得関数を実装する
-    - `_get_applicant_name(tool_context)`関数を作成
-    - ToolContextからinvocation_stateを安全に取得
-    - 申請者名が存在しない場合は"未設定"を返す
-    - docstringを日本語で記述
-    - _Requirements: 1.1, 4.1_
-  
-  - [ ]* 1.2 申請者名取得のプロパティテストを作成する
-    - **Property 1: 申請者名の正確な取得**
-    - **Validates: Requirements 1.1**
-    - Hypothesisを使用してランダムなToolContextを生成
-    - invocation_stateあり/なしの両方のケースをテスト
-    - 最低100イテレーションで実行
-  
-  - [x] 1.3 ファイル名生成関数を実装する
-    - `_generate_filename(prefix)`関数を作成
-    - datetimeを使用してYYYYMMDD_HHMMSS形式のタイムスタンプを生成
-    - フォーマット: `{prefix}_YYYYMMDD_HHMMSS.xlsx`
-    - docstringを日本語で記述
-    - _Requirements: 1.2, 4.3_
-  
-  - [ ]* 1.4 ファイル名生成のプロパティテストを作成する
-    - **Property 2: ファイル名フォーマットの一貫性**
-    - **Validates: Requirements 1.2**
-    - ランダムなプレフィックス文字列を生成
-    - 正規表現で`{prefix}_\d{8}_\d{6}\.xlsx`パターンを検証
-    - 最低100イテレーションで実行
-  
-  - [x] 1.5 出力ディレクトリ確保関数を実装する
-    - `_ensure_output_directory()`関数を作成
-    - Pathlibを使用してoutput/ディレクトリを作成
-    - 既に存在する場合はスキップ
-    - Pathオブジェクトを返す
-    - docstringを日本語で記述
-    - _Requirements: 1.3, 4.1_
-
-- [x] 2. Excelワークブック関連のヘルパー関数を実装する
-  - [x] 2.1 ワークブック作成関数を実装する
-    - `_create_workbook(title)`関数を作成
-    - openpyxlを使用してWorkbookとWorksheetを作成
-    - ワークシートのタイトルを設定
-    - tuple[Workbook, Worksheet]を返す
-    - docstringを日本語で記述
-    - _Requirements: 1.3, 4.1_
-  
-  - [x] 2.2 スタイル定義作成関数を実装する
-    - `_create_style_definitions()`関数を作成
-    - Font、PatternFill、Alignmentオブジェクトを作成
-    - ヘッダー用: 太字12pt、#CCE5FF背景、中央揃え
-    - タイトル用: 太字14pt、中央揃え
-    - ラベル用: 太字12pt、#CCE5FF背景
-    - データ用: 中央揃え、右揃え
-    - 合計用: 太字12pt、右揃え
-    - 全てのスタイルを含む辞書を返す
-    - docstringを日本語で記述
+- [x] 1. Phase 1: ExcelStyleManagerクラスの実装
+  - [x] 1.1 ExcelStyleManagerクラスの基本構造を作成
+    - `tools/excel_generator.py`にExcelStyleManagerクラスを追加
+    - `__init__()`メソッドを実装し、`self.styles`を初期化
     - _Requirements: 1.5, 4.2_
-  
-  - [ ]* 2.3 スタイル定義のプロパティテストを作成する
+
+  - [x] 1.2 _create_style_definitions()メソッドを実装
+    - 既存の`_create_style_definitions()`関数のロジックをクラスメソッドに移行
+    - 全てのスタイル定義（header_font, header_fill, header_alignment, title_font, title_alignment, label_font, label_fill, data_alignment_center, data_alignment_right, total_font, total_alignment）を含む辞書を返す
+    - _Requirements: 1.5, 4.2_
+
+  - [x] 1.3 スタイル適用メソッドを実装
+    - `apply_header_style(cell)`メソッドを実装
+    - `apply_title_style(cell)`メソッドを実装
+    - `apply_label_style(cell)`メソッドを実装（新規）
+    - `apply_data_style(cell, alignment)`メソッドを実装（新規）
+    - _Requirements: 1.5, 4.2_
+
+  - [ ]* 1.4 ExcelStyleManagerのユニットテストを作成
+    - スタイル定義の完全性をテスト
+    - 各スタイル適用メソッドの動作をテスト
+    - _Requirements: 5.1, 5.2_
+
+  - [ ]* 1.5 ExcelStyleManagerのプロパティテストを実行
     - **Property 5: スタイル定義の完全性**
     - **Validates: Requirements 1.5**
-    - 返される辞書が全ての必須キーを含むことを検証
-    - 各値が適切なopenpyxlオブジェクト型であることを確認
-    - 最低100イテレーションで実行
-  
-  - [x] 2.4 スタイル適用関数を実装する
-    - `_apply_header_style(cell, styles)`関数を作成
-    - `_apply_title_style(cell, styles)`関数を作成
-    - セルにフォント、背景色、配置を一括適用
-    - docstringを日本語で記述
-    - _Requirements: 1.5, 4.1_
-  
-  - [x] 2.5 ワークブック保存関数を実装する
-    - `_save_workbook(wb, file_path)`関数を作成
-    - try-exceptでIOError、PermissionErrorをキャッチ
-    - 成功時はTrue、失敗時はFalseを返す
-    - docstringを日本語で記述
-    - _Requirements: 1.3, 3.2, 4.1_
 
-- [x] 3. Checkpoint - ヘルパー関数の動作確認
-  - 全てのヘルパー関数が正しく動作することを確認
-  - 基本的なユニットテストを実行
-  - 質問があればユーザーに確認
+- [x] 2. Phase 2: ExcelGeneratorBase基底クラスの実装
+  - [x] 2.1 ExcelGeneratorBase抽象基底クラスの基本構造を作成
+    - `tools/excel_generator.py`にExcelGeneratorBase抽象基底クラスを追加
+    - `from abc import ABC, abstractmethod`をインポート
+    - `__init__(tool_context)`メソッドを実装し、`self.tool_context`、`self.style_manager`、`self._error_handler`を初期化
+    - `generate(**kwargs)`抽象メソッドを定義
+    - _Requirements: 1.1, 4.1, 4.4_
 
-- [x] 4. receipt_excel_generatorのリファクタリング
-  - [x] 4.1 receipt_excel_generatorを共通ヘルパー関数を使用するように書き換える
-    - `_get_applicant_name()`を使用して申請者名を取得
-    - `_generate_filename("経費精算申請書")`を使用
-    - `_ensure_output_directory()`を使用
-    - `_create_workbook("経費精算申請書")`を使用
-    - `_create_style_definitions()`を使用
-    - 領収書固有のロジック（金額チェック、品目リスト）は保持
-    - `_save_workbook()`を使用
-    - 既存のインターフェース（パラメータ、戻り値）を維持
-    - _Requirements: 2.1, 2.3, 4.1, 5.3_
-  
-  - [ ]* 4.2 receipt_excel_generatorのユニットテストを実行する
-    - tests/test_tools.pyの既存テストを実行
-    - 全てのテストが合格することを確認
+  - [x] 2.2 申請者情報取得メソッドを実装
+    - 既存の`_get_applicant_name(tool_context)`関数を`_get_applicant_name(self)`メソッドに移行
+    - 既存の`_get_application_date(tool_context)`関数を`_get_application_date(self)`メソッドに移行
+    - `self.tool_context`を使用してinvocation_stateから情報を取得
+    - エラー時はデフォルト値を返す（"未設定"、現在日付）
+    - _Requirements: 1.1, 3.1, 4.1_
+
+  - [x] 2.3 ファイル管理メソッドを実装
+    - 既存の`_generate_filename(prefix)`関数を`_generate_filename(self, prefix)`メソッドに移行
+    - 既存の`_ensure_output_directory()`関数を`_ensure_output_directory(self)`メソッドに移行
+    - タイムスタンプフォーマット: `{prefix}_YYYYMMDD_HHMMSS.xlsx`
+    - 出力ディレクトリ: `output/`
+    - _Requirements: 1.2, 1.3, 4.3_
+
+  - [x] 2.4 ワークブック管理メソッドを実装
+    - 既存の`_create_workbook(title)`関数を`_create_workbook(self, title)`メソッドに移行
+    - 既存の`_save_workbook(wb, file_path)`関数を`_save_workbook(self, wb, file_path)`メソッドに移行
+    - エラーハンドリングを含む
+    - _Requirements: 1.4, 3.1, 3.2, 4.1_
+
+  - [x] 2.5 バリデーションエラー整形メソッドを実装
+    - `_format_validation_errors(self, e: ValidationError)`メソッドを新規作成
+    - Pydanticのバリデーションエラーを日本語のエラーメッセージに整形
+    - _Requirements: 3.1, 3.3, 3.4_
+
+  - [ ]* 2.6 ExcelGeneratorBaseのユニットテストを作成
+    - 各メソッドの正常系をテスト
+    - エラーケース（tool_contextがNone、invocation_stateが存在しない）をテスト
+    - デフォルト値の動作をテスト
     - _Requirements: 5.1, 5.2_
-  
-  - [ ]* 4.3 戻り値構造のプロパティテストを作成する（receipt用）
-    - **Property 4: 戻り値構造の完全性**
-    - **Validates: Requirements 1.4**
-    - ランダムな有効/無効入力データを生成
-    - 戻り値がsuccess、file_path、messageキーを含むことを検証
-    - 最低100イテレーションで実行
 
-- [x] 5. travel_excel_generatorのリファクタリング
-  - [x] 5.1 travel_excel_generatorを共通ヘルパー関数を使用するように書き換える
-    - `_get_applicant_name()`を使用して申請者名を取得
-    - `_generate_filename("交通費申請書")`を使用
-    - `_ensure_output_directory()`を使用
-    - `_create_workbook("交通費申請書")`を使用
-    - `_create_style_definitions()`を使用
-    - 交通費固有のロジック（経路テーブル、合計計算）は保持
-    - `_save_workbook()`を使用
-    - 既存のインターフェース（パラメータ、戻り値）を維持
-    - _Requirements: 2.2, 2.4, 4.1, 5.3_
-  
-  - [ ]* 5.2 travel_excel_generatorのユニットテストを実行する
-    - tests/test_tools.pyの既存テストを実行
-    - 全てのテストが合格することを確認
-    - _Requirements: 5.1, 5.2_
-  
-  - [ ]* 5.3 戻り値構造のプロパティテストを作成する（travel用）
-    - **Property 4: 戻り値構造の完全性**
-    - **Validates: Requirements 1.4**
-    - ランダムな有効/無効入力データを生成
-    - 戻り値がsuccess、file_path、total_cost、messageキーを含むことを検証
-    - 最低100イテレーションで実行
-  
-  - [ ]* 5.4 出力ディレクトリ保存のプロパティテストを作成する
+  - [ ]* 2.7 ExcelGeneratorBaseのプロパティテストを実行
+    - **Property 1: 申請者名の正確な取得**
+    - **Validates: Requirements 1.1**
+
+  - [ ]* 2.8 ファイル名フォーマットのプロパティテストを実行
+    - **Property 2: ファイル名フォーマットの一貫性**
+    - **Validates: Requirements 1.2**
+
+- [x] 3. Checkpoint - 基底クラスとスタイルマネージャーの動作確認
+  - 全てのテストが合格することを確認
+  - 必要に応じてユーザーに質問
+
+- [x] 4. Phase 3: ReceiptExcelGeneratorクラスの実装
+  - [x] 4.1 ReceiptExcelGeneratorクラスの基本構造を作成
+    - `tools/excel_generator.py`にReceiptExcelGeneratorクラスを追加（ExcelGeneratorBaseを継承）
+    - クラス定数を定義（FILE_PREFIX, SHEET_TITLE, COLUMN_WIDTH_A, COLUMN_WIDTH_B）
+    - _Requirements: 2.1, 2.3, 4.4_
+
+  - [x] 4.2 generate()メソッドを実装
+    - 既存の`receipt_excel_generator()`関数の処理ロジックを移行
+    - パラメータ: store_name, amount, date, items, expense_category
+    - Pydanticモデル（ReceiptExpenseInput）でバリデーション
+    - 基底クラスのメソッドを使用（_get_applicant_name, _get_application_date, _generate_filename, _ensure_output_directory, _create_workbook, _save_workbook）
+    - ExcelStyleManagerでスタイルを適用
+    - 戻り値: {"success": bool, "file_path": str, "message": str}
+    - _Requirements: 2.1, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4_
+
+  - [x] 4.3 _write_receipt_data()メソッドを実装
+    - 領収書データをワークシートに書き込む
+    - タイトル行、申請情報、領収書データを書き込み
+    - スタイルマネージャーを使用してスタイルを適用
+    - 列幅を調整
+    - _Requirements: 2.1, 2.3, 4.1_
+
+  - [ ]* 4.4 ReceiptExcelGeneratorのユニットテストを作成
+    - 正常系のテスト（有効なデータでExcelが生成される）
+    - バリデーションエラーのテスト（不正なデータでエラーが返される）
+    - ファイル保存の確認
+    - _Requirements: 5.1, 5.2, 5.3_
+
+  - [ ]* 4.5 ReceiptExcelGeneratorのプロパティテストを実行
     - **Property 3: 出力ディレクトリへの保存**
     - **Validates: Requirements 1.3**
-    - ランダムな有効入力データを生成
-    - 成功時のfile_pathが"output/"で始まることを検証
-    - 最低100イテレーションで実行
 
-- [x] 6. エラーハンドリングのテスト
-  - [ ]* 6.1 エラー時の戻り値構造のプロパティテストを作成する
+  - [ ]* 4.6 戻り値構造のプロパティテストを実行
+    - **Property 4: 戻り値構造の完全性**
+    - **Validates: Requirements 1.4**
+
+- [x] 5. Phase 4: TransportationExcelGeneratorクラスの実装
+  - [x] 5.1 TransportationExcelGeneratorクラスの基本構造を作成
+    - `tools/excel_generator.py`にTransportationExcelGeneratorクラスを追加（ExcelGeneratorBaseを継承）
+    - クラス定数を定義（FILE_PREFIX, SHEET_TITLE, COLUMN_WIDTHS, TRANSPORT_TYPE_MAP）
+    - _Requirements: 2.2, 2.4, 4.4_
+
+  - [x] 5.2 generate()メソッドを実装
+    - 既存の`transportation_excel_generator()`関数の処理ロジックを移行
+    - パラメータ: routes
+    - Pydanticモデル（RouteInput）でバリデーション
+    - 基底クラスのメソッドを使用
+    - ExcelStyleManagerでスタイルを適用
+    - 戻り値: {"success": bool, "file_path": str, "total_cost": float, "message": str}
+    - _Requirements: 2.2, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4_
+
+  - [x] 5.3 _calculate_total_cost()メソッドを実装
+    - 経路データリストから合計交通費を計算
+    - _Requirements: 2.2, 2.4_
+
+  - [x] 5.4 _write_routes_table()メソッドを実装
+    - 経路テーブルをワークシートに書き込む
+    - ヘッダー行、各経路データ、合計行を書き込み
+    - スタイルマネージャーを使用してスタイルを適用
+    - 列幅を調整
+    - _Requirements: 2.2, 2.4, 4.1_
+
+  - [ ]* 5.5 TransportationExcelGeneratorのユニットテストを作成
+    - 正常系のテスト（有効なデータでExcelが生成される）
+    - 空の経路リストのテスト（エラーが返される）
+    - 合計交通費の計算精度をテスト
+    - _Requirements: 5.1, 5.2, 5.3_
+
+  - [ ]* 5.6 TransportationExcelGeneratorのプロパティテストを実行
+    - **Property 3: 出力ディレクトリへの保存**
+    - **Validates: Requirements 1.3**
+
+  - [ ]* 5.7 戻り値構造のプロパティテストを実行
+    - **Property 4: 戻り値構造の完全性**
+    - **Validates: Requirements 1.4**
+
+- [x] 6. Checkpoint - 全クラスの動作確認
+  - 全てのテストが合格することを確認
+  - 生成されたExcelファイルの内容を確認
+  - 必要に応じてユーザーに質問
+
+- [x] 7. Phase 5: ファサード関数の実装
+  - [x] 7.1 receipt_excel_generator()ファサード関数を実装
+    - 既存の`receipt_excel_generator()`関数を書き換え
+    - @toolデコレータとcontext=Trueを維持
+    - 内部でReceiptExcelGeneratorクラスをインスタンス化
+    - generator.generate()を呼び出して結果を返す
+    - パラメータと戻り値の構造は変更しない
+    - _Requirements: 2.1, 2.3, 2.5, 5.1, 5.2, 5.3_
+
+  - [x] 7.2 transportation_excel_generator()ファサード関数を実装
+    - 既存の`transportation_excel_generator()`関数を書き換え
+    - @toolデコレータとcontext=Trueを維持
+    - 内部でTransportationExcelGeneratorクラスをインスタンス化
+    - generator.generate()を呼び出して結果を返す
+    - パラメータと戻り値の構造は変更しない
+    - _Requirements: 2.2, 2.4, 2.5, 5.1, 5.2, 5.3_
+
+  - [ ]* 7.3 既存のテストとの互換性を確認
+    - `tests/test_tools.py`のTestExcelGeneratorToolsクラスの全テストを実行
+    - 全てのテストが合格することを確認
+    - _Requirements: 5.1, 5.2, 5.3_
+
+  - [ ]* 7.4 エラー時の戻り値構造のプロパティテストを実行
     - **Property 6: エラー時の戻り値構造**
-    - **Validates: Requirements 3.1**
-    - ランダムな不正入力データを生成（空リスト、不正日付など）
-    - success=False、messageが非空、file_pathが空であることを検証
-    - 最低100イテレーションで実行
-  
-  - [ ]* 6.2 日本語エラーメッセージのプロパティテストを作成する
+    - **Validates: Requirements 3.1, 3.4**
+
+  - [ ]* 7.5 日本語エラーメッセージのプロパティテストを実行
     - **Property 7: 日本語エラーメッセージ**
     - **Validates: Requirements 3.3**
-    - ランダムなエラーケースを生成
-    - messageに日本語文字（ひらがな、カタカナ、漢字）が含まれることを検証
-    - 正規表現で日本語文字範囲をチェック
-    - 最低100イテレーションで実行
-  
-  - [ ]* 6.3 エラーハンドリングのユニットテストを作成する
-    - 空の経路リストでエラーが返されることをテスト
-    - 不正な日付フォーマットでバリデーションエラーが発生することをテスト
-    - ファイル保存失敗時のエラーハンドリングをテスト
-    - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-- [x] 7. ドキュメントの更新
-  - [x] 7.1 モジュールレベルのdocstringを更新する
-    - リファクタリング後の構造を説明
-    - 共通ヘルパー関数の一覧を記載
-    - 公開ツール関数の使用方法を説明
-    - 日本語で記述
-    - _Requirements: 6.1, 6.3, 6.4_
-  
-  - [x] 7.2 各関数のdocstringを確認・更新する
-    - 全ての関数にdocstringが存在することを確認
-    - パラメータと戻り値の説明が正確であることを確認
-    - 日本語で記述されていることを確認
-    - _Requirements: 6.1, 6.2, 6.4_
+- [x] 8. Phase 6: 既存ヘルパー関数の削除（オプション）
+  - [x] 8.1 既存のヘルパー関数を削除
+    - 既存の`_get_applicant_name(tool_context)`関数を削除
+    - 既存の`_get_application_date(tool_context)`関数を削除
+    - 既存の`_generate_filename(prefix)`関数を削除
+    - 既存の`_ensure_output_directory()`関数を削除
+    - 既存の`_create_workbook(title)`関数を削除
+    - 既存の`_create_style_definitions()`関数を削除
+    - 既存の`_apply_header_style(cell, styles)`関数を削除
+    - 既存の`_apply_title_style(cell, styles)`関数を削除
+    - 既存の`_save_workbook(wb, file_path)`関数を削除
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 4.1, 4.2, 4.3_
 
-- [x] 8. Final Checkpoint - 統合テストと最終確認
-  - 全てのユニットテストを実行して合格を確認
-  - 全てのプロパティテストを実行して合格を確認
-  - tests/test_tools.pyの既存テストが全て合格することを確認
-  - コードカバレッジを確認（目標: 行90%以上、分岐85%以上）
-  - 質問があればユーザーに確認
+  - [ ]* 8.2 全てのテストを再実行
+    - `tests/test_tools.py`の全テストを実行
+    - 新しいユニットテストとプロパティテストを実行
+    - 全てのテストが合格することを確認
+    - _Requirements: 5.1, 5.2, 5.3_
+
+- [x] 9. 最終チェックポイント - リファクタリング完了確認
+  - 全てのテストが合格することを確認
+  - コードの重複が削減されていることを確認
+  - 既存のエージェント（receipt_expense_agent、travel_agent）との統合が正常に動作することを確認
+  - ドキュメント（docstring）が適切に更新されていることを確認
+  - 必要に応じてユーザーに最終確認
 
 ## Notes
 
-- `*`マークが付いたタスクはオプションで、より速いMVPのためにスキップ可能です
-- 各タスクは具体的な要件を参照しており、トレーサビリティを確保しています
-- チェックポイントで段階的な検証を行います
-- プロパティテストは普遍的な正確性プロパティを検証します
-- ユニットテストは特定の例とエッジケースを検証します
-- 既存のテストとの互換性を維持することで、エージェントの動作が保証されます
+- タスクに`*`マークが付いているものはオプションのテストタスクです。MVPを早く完成させたい場合はスキップできます。
+- 各タスクには対応するRequirements番号が記載されています。詳細は`requirements.md`を参照してください。
+- チェックポイントタスクでは、全てのテストが合格することを確認し、問題があればユーザーに質問してください。
+- Phase 6（既存ヘルパー関数の削除）は完全にオプションです。Phase 5までで後方互換性は維持されます。
+- プロパティテストは、Hypothesisライブラリを使用して実装します。
+- 既存のテスト（tests/test_tools.py）が全て合格することが、リファクタリング成功の必須条件です。
