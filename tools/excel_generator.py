@@ -247,7 +247,7 @@ class ReceiptExcelGenerator(ExcelGeneratorBase):
                     expense_category=expense_category
                 )
             except ValidationError as e:
-                self._error_handler.handle_validation_error(
+                error_message = self._error_handler.handle_validation_error(
                     e,
                     context={
                         "store_name": store_name,
@@ -260,7 +260,7 @@ class ReceiptExcelGenerator(ExcelGeneratorBase):
                 return {
                     "success": False,
                     "file_path": "",
-                    "message": f"エラー: 入力データが不正です"
+                    "message": error_message
                 }
             
             # Excelファイルの準備
@@ -382,7 +382,7 @@ class TransportationExcelGenerator(ExcelGeneratorBase):
                     validated_route = RouteInput(**route)
                     validated_routes.append(validated_route)
                 except ValidationError as e:
-                    self._error_handler.handle_validation_error(
+                    error_message = self._error_handler.handle_validation_error(
                         e,
                         context={"route_index": i+1, "route_data": route}
                     )
@@ -390,7 +390,7 @@ class TransportationExcelGenerator(ExcelGeneratorBase):
                         "success": False,
                         "file_path": "",
                         "total_cost": 0,
-                        "message": f"エラー: 経路{i+1}のデータが不正です"
+                        "message": error_message
                     }
             
             # 合計交通費の計算
