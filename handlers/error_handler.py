@@ -347,7 +347,7 @@ class ErrorHandler:
         error_message = f"[{agent_name}] RuntimeError: {str(error)[:100]}"
         
         # ログ出力
-        self.log_warning(error_message, context)
+        self.log_error("RuntimeError", error_message, context, exc_info=True)
         
         # 構造化されたエラーレスポンス
         user_message = """

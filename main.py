@@ -11,24 +11,24 @@ from handlers.error_handler import ErrorHandler
 # .envファイルを読み込み
 load_dotenv()
 
-# logger設定
-log_level = os.getenv("LOG_LEVEL", "INFO")
-
 # ログディレクトリの作成
 os.makedirs("logs", exist_ok=True)
 
+# ファイル用ハンドラー（WARNING以上のみ、コンソール出力なし）
+_file_handler = logging.FileHandler("logs/error.log", encoding="utf-8")
+_file_handler.setLevel(logging.WARNING)
+_file_handler.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(name)s - %(message)s"
+))
+
 # 基本設定
 logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-    level=log_level,
-    handlers=[
-        logging.StreamHandler(),  # コンソール出力
-        logging.FileHandler("logs/error.log", encoding="utf-8")  # ファイル出力
-    ]
+    level=logging.WARNING,
+    handlers=[_file_handler]  # ファイル出力のみ
 )
 
 # AWS Strandsライブラリの制御
-logging.getLogger("strands").setLevel(log_level)
+logging.getLogger("strands").setLevel(logging.WARNING)
 
 # スタックトレースを抑制（エンドユーザー向けアプリケーション）
 logging.getLogger("strands.event_loop.event_loop").setLevel(logging.CRITICAL)
