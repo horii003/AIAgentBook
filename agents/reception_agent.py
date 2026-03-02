@@ -9,6 +9,7 @@
 """
 
 from datetime import datetime
+import logging
 from strands import Agent
 from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
@@ -17,9 +18,12 @@ from agents.receipt_expense_agent import receipt_expense_agent
 from session.session_manager import SessionManagerFactory
 from handlers.error_handler import ErrorHandler, LoopLimitError
 from handlers.loop_control_hook import LoopControlHook
+from strands.types.exceptions import ContextWindowOverflowException, MaxTokensReachedException
 from prompt.prompt_reception import RECEPTION_SYSTEM_PROMPT
 from config.model_config import ModelConfig
 from models.data_models import InvocationState
+
+logger = logging.getLogger(__name__)
 
 class ReceptionAgent:
     # 初期化
@@ -37,7 +41,7 @@ class ReceptionAgent:
         if self._applicant_initialized:
             return
 
-        self._error_handler.log_info("申請者情報の初期化を開始します")    
+        logger.info("申請者情報の初期化を開始します")
         
         print("\n" + "=" * 60)
         print("初期設定")
@@ -56,7 +60,7 @@ class ReceptionAgent:
         # セッションIDを生成（SessionManagerFactoryの共通メソッドを使用）
         self._session_id = SessionManagerFactory.generate_session_id()
 
-        self._error_handler.log_info("セッションを作成しました")
+        logger.info("セッションを作成しました")
         
         # セッションマネージャーの作成
         self._session_manager = SessionManagerFactory.create_session_manager(self._session_id)
@@ -99,7 +103,7 @@ class ReceptionAgent:
 
     #エージェントを実行
     def run(self):
-        self._error_handler.log_info("申請受付窓口エージェントを起動しました")
+        logger.info("申請受付窓口エージェントを起動しました")
         print("=" * 60)
         print("こちらは申請受付窓口エージェントです")
         print("社内の様々な申請作業をサポートします")
@@ -119,13 +123,13 @@ class ReceptionAgent:
                 
                 # 終了時の処理
                 if user_input.lower() in ["exit", "quit", "終了"]:
-                    self._error_handler.log_info("ユーザーが終了を選択しました")
+                    logger.info("ユーザーが終了を選択しました")
                     print("\nエージェント: ご利用ありがとうございました。")
                     break
                 
                 # リセット処理
                 if user_input.lower() in ["reset", "リセット", "最初から"]:
-                    self._error_handler.log_info("ユーザーがリセットを選択しました")
+                    logger.info("ユーザーがリセットを選択しました")
                     self._applicant_name = None
                     self._applicant_initialized = False
                     self._session_id = None
@@ -157,48 +161,55 @@ class ReceptionAgent:
 
             except KeyboardInterrupt:
                 # キーボード中断（Ctrl+C）：ErrorHandlerで処理
-                user_message = self._error_handler.handle_keyboard_interrupt(
-                    context={"session_id": self._session_id}
-                )
+                logger.info(f"ユーザーによる中断（KeyboardInterrupt） | session_id: {self._session_id}")
+                user_message = self._error_handler.handle_keyboard_interrupt()
                 print(f"\n\nエージェント: {user_message}")
                 break
 
 
             except LoopLimitError as e:
                 # ループ制限エラーの処理
-                user_message = self._error_handler.handle_loop_limit_error(
-                    e,
-                    {"agent": e.agent_name, 
-                    "session_id": self._session_id
-                    }
-                )
+                logger.warning(f"LoopLimitError が発生しました: {str(e)} | agent: {e.agent_name}")
+                user_message = self._error_handler.handle_loop_limit_error(e)
 
                 print("\n" + "="*60)
                 print(f"\n{user_message}")
                 print("="*60 + "\n")
                 continue
 
+            except ContextWindowOverflowException as e:
+                # コンテキストウィンドウ超過エラー
+                logger.warning(f"ContextWindowOverflowException が発生しました: {str(e)}")
+                user_message = self._error_handler.handle_context_window_error(e)
+                print("\n" + "="*60)
+                print(f"\n{user_message}\n")
+                print("="*60 + "\n")
+                continue
+
+            except MaxTokensReachedException as e:
+                # 最大トークン数到達エラー
+                logger.warning(f"MaxTokensReachedException が発生しました: {str(e)}")
+                user_message = self._error_handler.handle_max_tokens_error(e)
+                print("\n" + "="*60)
+                print(f"\n{user_message}\n")
+                print("="*60 + "\n")
+                continue
 
             except RuntimeError as e:
                 # その他のRuntimeError
-                user_message = self._error_handler.handle_runtime_error(
-                    error=e,
-                    agent_name="reception_agent",
-                    context={"session_id": self._session_id}
-                )
+                logger.error(f"RuntimeError が発生しました: {str(e)[:100]} | session_id: {self._session_id}", exc_info=True)
+                user_message = self._error_handler.handle_runtime_error(e)
                 print("\n" + "="*60)
                 print(f"\n{user_message}\n")
                 print("="*60 + "\n")
-                break
+                continue
 
             except Exception as e:
                 # 予期しないエラー
-                user_message = self._error_handler.handle_unexpected_error(
-                    error=e,
-                    agent_name="reception_agent",
-                    context={"session_id": self._session_id}
-                )
+                logger.error(f"予期しないエラーが発生しました: {type(e).__name__}: {str(e)[:100]} | session_id: {self._session_id}", exc_info=True)
+                user_message = self._error_handler.handle_unexpected_error(e)
+                
                 print("\n" + "="*60)
                 print(f"\n{user_message}\n")
                 print("="*60 + "\n")
-                break
+                continue

@@ -1,7 +1,7 @@
 """エラーハンドリング関連のモジュール"""
 import logging
-from datetime import datetime
-from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class LoopLimitError(RuntimeError):
@@ -30,137 +30,77 @@ class LoopLimitError(RuntimeError):
         )
         super().__init__(message)
 
+
 class ErrorHandler:
-    """エラーハンドリング + ログ出力ヘルパー関数クラス"""
-    
-    def __init__(self):
-        """
-        エラーハンドラーの初期化
-        
-        Note:
-            ログ設定はmain.pyで実施済み
-        """
+    """ユーザー向けエラーメッセージ生成クラス"""
 
-        self.logger = logging.getLogger(__name__)
-
-
-    def log_debug(self, message: str, context: Optional[dict] = None):
+    def handle_throttling_error(self, error: Exception) -> str:
         """
-        デバッグログを出力
-        
+        APIレート制限エラーの処理
+
         Args:
-            message: ログメッセージ
-            context: コンテキスト情報（オプション）
-        """
-        if context:
-            self.logger.debug(f"{message} | Context: {context}")
-        else:
-            self.logger.debug(message)
-    
+            error: ModelThrottledExceptionオブジェクト
 
-    def log_info(self, message: str, context: Optional[dict] = None):
-        """
-        情報ログを出力
-        
-        Args:
-            message: ログメッセージ
-            context: コンテキスト情報（オプション）
-        """
-        if context:
-            self.logger.info(f"{message} | Context: {context}")
-        else:
-            self.logger.info(message)
-    
-
-    def log_warning(self, message: str, context: Optional[dict] = None):
-        """
-        警告ログを出力
-        
-        Args:
-            message: ログメッセージ
-            context: コンテキスト情報（オプション）
-        """
-        if context:
-            self.logger.warning(f"{message} | Context: {context}")
-        else:
-            self.logger.warning(message)
-    
-
-    def log_error(self, error_type: str, message: str, context: Optional[dict] = None, exc_info: bool = False):
-        """
-        エラーログを出力
-        
-        Args:
-            error_type: エラータイプ
-            message: エラーメッセージ
-            context: エラーコンテキスト（オプション）
-            exc_info: スタックトレースをログに含めるか
-        """
-        if exc_info:
-            self.logger.error(f"{error_type}: {message} | Context: {context}", exc_info=True)
-        else:
-            self.logger.error(f"{error_type}: {message} | Context: {context}")
-    
-
-    def log_critical(self, message: str, context: Optional[dict] = None, exc_info: bool = False):
-        """
-        重大なエラーログを出力
-        
-        Args:
-            message: ログメッセージ
-            context: コンテキスト情報（オプション）
-            exc_info: スタックトレースをログに含めるか
-        """
-        if exc_info:
-            self.logger.critical(f"{message} | Context: {context}", exc_info=True)
-        else:
-            self.logger.critical(f"{message} | Context: {context}")
-    
-
-
-#エラーハンドリングを定義
-    def handle_bedrock_error(self, error: Exception, context: Optional[dict] = None) -> str:
-        """
-        Bedrock接続エラーの処理
-        
-        Args:
-            error: エラーオブジェクト
-            context: エラーコンテキスト
-        
         Returns:
             str: ユーザー向けエラーメッセージ
         """
-        error_message = f"Amazon Bedrockサービスへの接続に失敗しました: {str(error)}"
-        self.log_error("BedrockConnectionError", error_message, context)
-        
         user_message = """
-        Amazon Bedrockサービスに接続できませんでした。
-        以下を確認してください：
-        1. AWS認証情報が正しく設定されているか
-        2. インターネット接続が正常か
-        3. Amazon Bedrockへのアクセス権限があるか
+        Amazon Bedrockへのリクエストが集中しています。
+        しばらく時間をおいてから再度お試しください。
         
         問題が解決しない場合は、システム管理者にお問い合わせください。
         """
-        
         return user_message.strip()
-    
 
-    def handle_fare_data_error(self, error: Exception, context: Optional[dict] = None) -> str:
+
+    def handle_max_tokens_error(self, error: Exception) -> str:
+        """
+        最大トークン数到達エラーの処理
+
+        Args:
+            error: MaxTokensReachedExceptionオブジェクト
+
+        Returns:
+            str: ユーザー向けエラーメッセージ
+        """
+        user_message = """
+        処理できる文章量の上限に達しました。
+        システムを再起動して、最初からお試しください。
+        
+        申請内容が長い場合は、複数回に分けて申請してください。
+        """
+        return user_message.strip()
+
+
+    def handle_context_window_error(self, error: Exception) -> str:
+        """
+        コンテキストウィンドウ超過エラーの処理
+
+        Args:
+            error: ContextWindowOverflowExceptionオブジェクト
+
+        Returns:
+            str: ユーザー向けエラーメッセージ
+        """
+        user_message = """
+        会話の内容が長くなりすぎて処理できなくなりました。
+        システムを再起動して、最初からお試しください。
+        
+        申請内容が複雑な場合は、1件ずつ分けて申請してください。
+        """
+        return user_message.strip()
+
+
+    def handle_fare_data_error(self, error: Exception) -> str:
         """
         運賃データ読み込みエラーの処理
         
         Args:
             error: エラーオブジェクト
-            context: エラーコンテキスト
         
         Returns:
             str: ユーザー向けエラーメッセージ
         """
-        # ログ出力（スタックトレースを含める）
-        self.log_error("FareDataLoadError", str(error), context, exc_info=True)
-        
-        # メッセージ生成
         if isinstance(error, FileNotFoundError):
             user_message = """
             運賃データファイルが見つかりません。
@@ -181,21 +121,16 @@ class ErrorHandler:
         return user_message.strip()
 
 
-    def handle_calculation_error(self, error: Exception, context: Optional[dict] = None) -> str:
+    def handle_calculation_error(self, error: Exception) -> str:
         """
         計算エラーの処理
         
         Args:
             error: エラーオブジェクト
-            context: エラーコンテキスト
         
         Returns:
             str: ユーザー向けエラーメッセージ
         """
-        error_message = f"交通費の計算に失敗しました: {str(error)}"
-
-        self.log_error("CalculationError", error_message, context, exc_info=True)
-        
         user_message = f"""
                 交通費の計算中にエラーが発生しました。
                 エラー詳細: {str(error)}
@@ -208,22 +143,18 @@ class ErrorHandler:
                 もう一度入力してください。
                 """
         return user_message.strip()
-    
 
-    def handle_file_save_error(self, error: Exception, context: Optional[dict] = None) -> str:
+
+    def handle_file_save_error(self, error: Exception) -> str:
         """
         ファイル保存エラーの処理
         
         Args:
             error: エラーオブジェクト
-            context: エラーコンテキスト
         
         Returns:
             str: ユーザー向けエラーメッセージ
         """
-        error_message = f"ファイルの保存に失敗しました: {str(error)}"
-        self.log_error("FileSaveError", error_message, context)
-        
         user_message = f"""
         申請書の保存中にエラーが発生しました。
         エラー詳細: {str(error)}
@@ -233,75 +164,50 @@ class ErrorHandler:
         2. ディスク容量が十分にあるか
         
         代替の保存場所を指定する場合は、システム管理者にお問い合わせください。
-        
         """
-
         return user_message.strip()
-    
 
-    def handle_validation_error(self, error: Exception, context: Optional[dict] = None) -> str:
+
+    def handle_validation_error(self, error: Exception) -> str:
         """
         入力検証エラーの処理
         
         Args:
             error: エラーオブジェクト
-            context: エラーコンテキスト
         
         Returns:
             str: ユーザー向けエラーメッセージ
         """
-        error_message = f"入力データの検証に失敗しました: {str(error)}"
-
-        #ログ出力
-        self.log_error("ValidationError", error_message, context, exc_info=True)
-        
-        #ユーザー向けメッセージ作成
         user_message = f"""
         入力データに問題があります。
         エラー詳細: {str(error)}
         正しい形式で再度入力してください。
         """
-
         return user_message.strip()
-    
-    
-    def handle_keyboard_interrupt(self, context: Optional[dict] = None) -> str:
+
+
+    def handle_keyboard_interrupt(self) -> str:
         """
         キーボード中断（Ctrl+C）の処理
-        
-        Args:
-            context: エラーコンテキスト
         
         Returns:
             str: ユーザー向けメッセージ
         """
-        # ログ出力
-        self.log_info("ユーザーによる中断", context)
-        
-        # ユーザー向けメッセージ
-        user_message = "システムを終了します。"
-        
-        return user_message
-    
-    
-    def handle_loop_limit_error(self, error: LoopLimitError, context: Optional[dict] = None) -> str:
+        return "ユーザーによる中断により、システムを終了します。"
+
+
+    def handle_loop_limit_error(self, error: LoopLimitError) -> str:
         """
         エージェントループ制限エラーの処理
         
         Args:
             error: LoopLimitErrorオブジェクト
-            context: エラーコンテキスト
         
         Returns:
             str: 構造化されたエラーレスポンス
         """
-        # エラーメッセージを作成
         error_message = f"エージェント '{error.agent_name}' がループ制限に到達: {error.current_iteration}/{error.max_iterations}"
         
-        # ログ出力
-        self.log_error("LoopLimitError", error_message, context)
-        
-        # エージェント名に応じた具体例を生成
         if "交通費" in error.agent_name:
             specific_example = "複数の経路を一度に申請する場合は、1経路ずつ申請してください"
         elif "経費精算" in error.agent_name or "領収書" in error.agent_name:
@@ -309,7 +215,6 @@ class ErrorHandler:
         else:
             specific_example = "複数の申請を一度に行う場合は、1つずつ申請してください"
         
-        # 構造化されたエラーレスポンス
         user_message = f"""
         申し訳ございません。処理が複雑すぎて完了できませんでした。
         エージェントループが発生しているようです。
@@ -325,66 +230,43 @@ class ErrorHandler:
         例：申請に関係のない質問や情報は別途お尋ねください
 
         シンプルな内容で再度お試しください。
-
         """
-        
         return user_message.strip()
-    
-    
-    def handle_runtime_error(self, error: Exception, agent_name: str, context: Optional[dict] = None) -> str:
+
+
+    def handle_runtime_error(self, error: Exception) -> str:
         """
         RuntimeErrorの処理
         
         Args:
             error: エラーオブジェクト
-            agent_name: エージェント名
-            context: エラーコンテキスト
         
         Returns:
             str: ユーザー向けエラーメッセージ
         """
-        # エラーメッセージを作成
-        error_message = f"[{agent_name}] RuntimeError: {str(error)[:100]}"
-        
-        # ログ出力
-        self.log_warning(error_message, context)
-        
-        # 構造化されたエラーレスポンス
         user_message = """
         【エラー】
-        \n申し訳ございません。処理中にエラーが発生しました。
-        \n問題が解決しない場合は、システム管理者にお問い合わせください
-        \nもう一度お試しください。"""
-        
+        申し訳ございません。処理中にエラーが発生しました。
+        システムを再起動してください。
+        また、問題が解決しない場合は、システム管理者にお問い合わせください
+        """
         return user_message.strip()
-    
-    
-    def handle_unexpected_error(self, error: Exception, agent_name: str, context: Optional[dict] = None) -> str:
+
+
+    def handle_unexpected_error(self, error: Exception) -> str:
         """
         予期しないエラーの処理
         
         Args:
             error: エラーオブジェクト
-            agent_name: エージェント名
-            context: エラーコンテキスト
         
         Returns:
             str: ユーザー向けエラーメッセージ
         """
-        # エラーメッセージを作成
-        error_message = f"[{agent_name}] 予期しないエラー: {str(error)}"
-        
-        # ログ出力（スタックトレース付き）
-        self.log_error("UnexpectedError", error_message, context, exc_info=True)
-        
-        # 構造化されたエラーレスポンス
         user_message = """
         【予期しないエラー】
         申し訳ございません。予期しないエラーが発生しました。
-        \nシステムを再起動してください。
-        \nまた、問題が解決しない場合は、以下の情報をシステム管理者に伝えてください
-        \nもう一度お試しください。
+        システムを再起動してください。
+        また、問題が解決しない場合は、システム管理者に伝えてください
         """
-        
         return user_message.strip()
-    

@@ -4,10 +4,11 @@ Human-in-the-Loop承認フック
 excel_generatorツールの実行前に人間の承認を求め、
 修正要望があれば修正を実行するフック。
 """
-
+import logging
 from typing import Any
 from strands.hooks import HookProvider, HookRegistry, BeforeToolCallEvent
-from handlers.error_handler import ErrorHandler
+
+logger = logging.getLogger(__name__)
 
 
 class HumanApprovalHook(HookProvider):
@@ -33,7 +34,6 @@ class HumanApprovalHook(HookProvider):
                                - feedback: 修正要望の内容（承認時は空文字列）
         """
         self.approval_callback = approval_callback or self._default_approval_callback
-        self._error_handler = ErrorHandler()  # 他のクラスと命名規則を統一
     
     def register_hooks(self, registry: HookRegistry, **kwargs: Any) -> None:
         """フックの登録"""
@@ -54,28 +54,21 @@ class HumanApprovalHook(HookProvider):
         
         tool_params = event.tool_use.get("input", {})
         
-        self._error_handler.log_info(
+        logger.info(
             f"ツール実行前の承認を求めています: {tool_name}",
-            context={"tool_name": tool_name, "tool_params": tool_params}
         )
         
         # 承認コールバックを呼び出し
         approved, feedback = self.approval_callback(tool_name, tool_params)
         
         if approved:
-            self._error_handler.log_info(
-                f"ツール実行が承認されました: {tool_name}",
-                context={"tool_name": tool_name}
-            )
+            logger.info(f"ツール実行が承認されました: {tool_name}")
             # 承認された場合は何もしない（ツールが実行される）
             return
         else:
             # 拒否または修正要望の場合はツール実行をキャンセル
             if feedback:
-                self._error_handler.log_info(
-                    f"修正要望またはキャンセル: {feedback}",
-                    context={"tool_name": tool_name, "feedback": feedback}
-                )
+                logger.info(f"修正要望またはキャンセル: {feedback}")
                 # キャンセルの場合は特別なメッセージ
                 if feedback.upper() == "CANCEL":
                     cancel_message = (
@@ -92,10 +85,7 @@ class HumanApprovalHook(HookProvider):
                     )
             else:
                 # feedbackが空の場合もキャンセルとして扱う（後方互換性）
-                self._error_handler.log_info(
-                    f"ツール実行がキャンセルされました: {tool_name}",
-                    context={"tool_name": tool_name}
-                )
+                logger.info(f"ツール実行がキャンセルされました: {tool_name}")
                 cancel_message = (
                     "ユーザーが申請をキャンセルしました。\n\n"
                     "承知いたしました。申請をキャンセルいたしました。\n"

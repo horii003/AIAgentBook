@@ -1,18 +1,16 @@
 """運賃計算関連のツール"""
 import json
+import logging
 import os
-from typing import Tuple
 from strands import tool
 from pydantic import ValidationError
 from models.data_models import FareData, TrainFareRoute, FareCalculationInput
 from handlers.error_handler import ErrorHandler
 
-
-# エラーハンドラーの初期化
-_error_handler = ErrorHandler()
+logger = logging.getLogger(__name__)
 
 #運賃データの読み込み関数
-def load_fare_data():
+def load_fare_data() -> tuple[bool, dict | str]:
     """
     dataフォルダから運賃データを読み込みます。
     
@@ -22,6 +20,8 @@ def load_fare_data():
             - エラー時: (False, ユーザー向けエラーメッセージstr)
     """
 
+    _error_handler = ErrorHandler()
+
     # ファイルパスの設定
     train_fares_path = os.path.join("data", "train_fares.json")
     fixed_fares_path = os.path.join("data", "fixed_fares.json")
@@ -29,16 +29,18 @@ def load_fare_data():
     # ファイルの存在有無を確認
     #電車運賃のファイル確認
     if not os.path.exists(train_fares_path):
-        e = FileNotFoundError(f"電車運賃データファイルが見つかりません: {train_fares_path}")
-        context = {"file": train_fares_path, "file_type": "train_fares"}
-        error_message = _error_handler.handle_fare_data_error(e, context)
+        logger.warning(f"電車運賃データファイルが見つかりません: {train_fares_path}")
+        error_message = _error_handler.handle_fare_data_error(
+            FileNotFoundError(train_fares_path)
+        )
         return False, error_message
 
     #固定運賃のファイルの確認
     if not os.path.exists(fixed_fares_path):
-        e = FileNotFoundError(f"固定運賃データファイルが見つかりません: {fixed_fares_path}")
-        context = {"file": fixed_fares_path, "file_type": "fixed_fares"}
-        error_message = _error_handler.handle_fare_data_error(e, context)
+        logger.warning(f"固定運賃データファイルが見つかりません: {fixed_fares_path}")
+        error_message = _error_handler.handle_fare_data_error(
+            FileNotFoundError(fixed_fares_path)
+        )
         return False, error_message
         
     
@@ -62,18 +64,20 @@ def load_fare_data():
             "fixed_fares": fare_data_model.fixed_fares
         }
 
-        _error_handler.log_info('運賃データを読み込みました')
+        logger.info('運賃データを読み込みました')
 
         return True, dict_fare_data
     
     except json.JSONDecodeError as e:
         context = {"error_type": "JSONDecodeError", "train_fares_path": train_fares_path, "fixed_fares_path": fixed_fares_path}
-        error_message = _error_handler.handle_fare_data_error(e, context)
+        logger.error(f"運賃データのJSONパースに失敗しました: {str(e)} | Context: {context}", exc_info=True)
+        error_message = _error_handler.handle_fare_data_error(e)
         return False, error_message
 
     except Exception as e:
         context = {"error_type": type(e).__name__}
-        error_message = _error_handler.handle_fare_data_error(e, context)
+        logger.error(f"運賃データの読み込み中に予期しないエラーが発生しました: {str(e)} | Context: {context}", exc_info=True)
+        error_message = _error_handler.handle_fare_data_error(e)
         return False, error_message
 
 
@@ -102,16 +106,12 @@ def calculate_fare(
         }
     """
     # ツール呼び出しログ
-    _error_handler.log_info(
-        "calculate_fareツールが呼び出されました",
-        context={
-            "departure": departure,
-            "destination": destination,
-            "transport_type": transport_type,
-            "date": date
-        }
+    logger.info(
+        f"calculate_fareツールが呼び出されました: {departure} → {destination} ({transport_type}, {date})"
     )
-    
+
+    _error_handler = ErrorHandler()
+
     # Pydanticモデルで入力をバリデーション
     try:
         input_data = FareCalculationInput(
@@ -127,7 +127,8 @@ def calculate_fare(
             "transport_type": transport_type,
             "date": date
         }
-        error_message = _error_handler.handle_validation_error(e, context)
+        logger.error(f"入力バリデーションエラー: {str(e)} | Context: {context}", exc_info=True)
+        error_message = _error_handler.handle_validation_error(e)
         return {
             "success": False,
             "fare": 0,
@@ -155,9 +156,7 @@ def calculate_fare(
         # 運賃テーブルから該当する経路を検索
         for route in fare_data["train_fares"]:
             if route["departure"] == departure and route["destination"] == destination:
-                _error_handler.log_info(
-                    f"運賃を計算しました: {departure} → {destination} = ¥{route['fare']}"
-                )
+                logger.info(f"運賃を計算しました: {departure} → {destination} = ¥{route['fare']}")
                 return {
                     "success": True,
                     "fare": float(route["fare"]),
@@ -173,7 +172,8 @@ def calculate_fare(
             "transport_type": normalized_transport,
             "date": date
         }
-        error_message = _error_handler.handle_calculation_error(e, context)
+        logger.error(f"運賃計算エラー: {str(e)} | Context: {context}")
+        error_message = _error_handler.handle_calculation_error(e)
         return {
             "success": False,
             "fare": 0,
@@ -189,8 +189,7 @@ def calculate_fare(
             "taxi": "タクシー",
             "airplane": "飛行機"
         }
-        _error_handler.log_info(f"運賃を計算しました: {transport_name_map[normalized_transport]} = ¥{fare}"
-        )
+        logger.info(f"運賃を計算しました: {transport_name_map[normalized_transport]} = ¥{fare}")
         return {
             "success": True,
             "fare": float(fare),

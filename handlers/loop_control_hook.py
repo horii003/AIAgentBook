@@ -4,7 +4,7 @@ ReActループ制御フック
 エージェントのReActループの最大回数を制御し、
 ループの状態を表示するフック。
 """
-
+import logging
 from typing import Any
 from strands.hooks import (
     HookProvider, 
@@ -16,7 +16,9 @@ from strands.hooks import (
     BeforeToolCallEvent,
     AfterToolCallEvent
 )
-from handlers.error_handler import ErrorHandler, LoopLimitError
+from handlers.error_handler import LoopLimitError
+
+logger = logging.getLogger(__name__)
 
 
 class LoopControlHook(HookProvider):
@@ -46,7 +48,6 @@ class LoopControlHook(HookProvider):
         self.max_iterations = max_iterations
         self.agent_name = agent_name
         self.current_iteration = 0
-        self._error_handler = ErrorHandler()  # ErrorHandlerを使用
     
     def register_hooks(self, registry: HookRegistry, **kwargs: Any) -> None:
         """フックの登録"""
@@ -65,8 +66,8 @@ class LoopControlHook(HookProvider):
             event: BeforeInvocationEvent
         """
         self.current_iteration = 0
-        self._error_handler.log_info(f"[{self.agent_name}] BeforeInvocationEvent: エージェント呼び出し開始")
-        self._error_handler.log_info(f"[{self.agent_name}] 最大ループ回数: {self.max_iterations}")
+        logger.info(f"[{self.agent_name}] BeforeInvocationEvent: エージェント呼び出し開始")
+        logger.info(f"[{self.agent_name}] 最大ループ回数: {self.max_iterations}")
     
     def on_before_model_call(self, event: BeforeModelCallEvent) -> None:
         """
@@ -75,7 +76,7 @@ class LoopControlHook(HookProvider):
         Args:
             event: BeforeModelCallEvent
         """
-        self._error_handler.log_info(f"[{self.agent_name}] BeforeModelCallEvent: モデル呼び出し #{self.current_iteration + 1}")
+        logger.info(f"[{self.agent_name}] BeforeModelCallEvent: モデル呼び出し #{self.current_iteration + 1}")
     
     def on_after_model_call(self, event: AfterModelCallEvent) -> None:
         """
@@ -91,14 +92,14 @@ class LoopControlHook(HookProvider):
         # ループカウントをインクリメント
         self.current_iteration += 1
         
-        self._error_handler.log_info(
+        logger.info(
             f"[{self.agent_name}] AfterModelCallEvent: モデル呼び出し完了 ({self.current_iteration}/{self.max_iterations})"
         )
         
         # 最大回数チェック
         if self.current_iteration >= self.max_iterations:
             # 警告ログを出力
-            self._error_handler.log_warning(
+            logger.warning(
                 f"[{self.agent_name}] ループ制限到達: {self.current_iteration}/{self.max_iterations}"
             )
             
@@ -117,7 +118,7 @@ class LoopControlHook(HookProvider):
             event: BeforeToolCallEvent
         """
         tool_name = event.tool_use.get("name", "unknown")
-        self._error_handler.log_info(f"[{self.agent_name}] BeforeToolCallEvent: ツール呼び出し - {tool_name}")
+        logger.info(f"[{self.agent_name}] BeforeToolCallEvent: ツール呼び出し - {tool_name}")
     
     def on_after_tool_call(self, event: AfterToolCallEvent) -> None:
         """
@@ -127,7 +128,7 @@ class LoopControlHook(HookProvider):
             event: AfterToolCallEvent
         """
         tool_name = event.tool_use.get("name", "unknown")
-        self._error_handler.log_info(f"[{self.agent_name}] AfterToolCallEvent: ツール呼び出し完了 - {tool_name}")
+        logger.info(f"[{self.agent_name}] AfterToolCallEvent: ツール呼び出し完了 - {tool_name}")
     
     def on_after_invocation(self, event: AfterInvocationEvent) -> None:
         """
@@ -136,6 +137,6 @@ class LoopControlHook(HookProvider):
         Args:
             event: AfterInvocationEvent
         """
-        self._error_handler.log_info(
+        logger.info(
             f"[{self.agent_name}] AfterInvocationEvent: エージェント呼び出し終了（合計ループ回数: {self.current_iteration}）"
         )

@@ -6,96 +6,89 @@ import warnings
 from dotenv import load_dotenv
 from agents.reception_agent import ReceptionAgent
 from handlers.error_handler import ErrorHandler
-
+from strands.types.exceptions import ModelThrottledException, MaxTokensReachedException
 
 # .envファイルを読み込み
 load_dotenv()
 
-# logger設定
-log_level = os.getenv("LOG_LEVEL", "INFO")
 
-# ログディレクトリの作成
-os.makedirs("logs", exist_ok=True)
+def _setup_logging():
+    """ロギングの初期設定"""
+    os.makedirs("logs", exist_ok=True)
 
-# 基本設定
-logging.basicConfig(
-    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-    level=log_level,
-    handlers=[
-        logging.StreamHandler(),  # コンソール出力
-        logging.FileHandler("logs/error.log", encoding="utf-8")  # ファイル出力
-    ]
-)
+    logging.basicConfig(
+        level=logging.WARNING,
+        format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+        handlers=[
+            logging.FileHandler("logs/error.log", encoding="utf-8"),
+        ]
+    )
 
-# AWS Strandsライブラリの制御
-logging.getLogger("strands").setLevel(log_level)
-
-# スタックトレースを抑制（エンドユーザー向けアプリケーション）
-logging.getLogger("strands.event_loop.event_loop").setLevel(logging.CRITICAL)
-
-# 警告メッセージを非表示
-warnings.filterwarnings("ignore")
-
-
-# ========== 以下、メイン関数==========
+# ========== 以下、メイン関数 ==========
 def main():
+    # ロギングの初期設定
+    _setup_logging()
+
+    logger = logging.getLogger(__name__)
+
     # エラーハンドラーの初期化
     _error_handler = ErrorHandler()
-    
+
     try:
-        _error_handler.log_info("システム起動")
+        logger.info("システム起動")
 
         # エージェントの初期化
         agent = ReceptionAgent()
-        
+
         # エージェントの実行
         agent.run()
 
         # エージェントの終了
-        _error_handler.log_info("システム正常終了")
-    
+        logger.info("システム正常終了")
+
     except KeyboardInterrupt:
         # キーボード中断（Ctrl+C）
+        logger.info("ユーザーによる中断（KeyboardInterrupt）")
         user_message = _error_handler.handle_keyboard_interrupt()
-        
+
         print("\n" + "=" * 60)
         print(f"\n{user_message}\n")
         print("=" * 60)
         sys.exit(0)
-    
+
+    except ModelThrottledException as e:
+        # APIレート制限エラー
+        logger.error(f"ModelThrottledException: {str(e)}")
+        user_message = _error_handler.handle_throttling_error(e)
+        print("\n" + "=" * 60)
+        print(f"\n{user_message}\n")
+        print("=" * 60)
+        sys.exit(1)
+
+    except MaxTokensReachedException as e:
+        # 最大トークン数到達エラー
+        logger.error(f"MaxTokensReachedException: {str(e)}")
+        user_message = _error_handler.handle_max_tokens_error(e)
+        print("\n" + "=" * 60)
+        print(f"\n{user_message}\n")
+        print("=" * 60)
+        sys.exit(1)
+
     except RuntimeError as e:
         # その他のRuntimeError
-        user_message = _error_handler.handle_runtime_error(
-            error=e,
-            agent_name="main",
-            context={"error_type": "RuntimeError"}
-        )
-        
+        logger.error(f"RuntimeError が発生しました: {str(e)[:100]}", exc_info=True)
+        user_message = _error_handler.handle_runtime_error(e)
+
         print("\n" + "=" * 60)
         print(f"\n{user_message}\n")
         print("=" * 60)
         sys.exit(1)
-    
-    
-    except ConnectionError as e:
-        # 接続エラー
-        user_message = _error_handler.handle_bedrock_error(
-            e, 
-            {"error_type": "ConnectionError"}
-        )
-        print("\n" + "=" * 60)
-        print(f"\n{user_message}\n")
-        print("=" * 60)
-        sys.exit(1)
-    
+
     except Exception as e:
         # その他のすべてのエラー
-        user_message = _error_handler.handle_unexpected_error(
-            e,
-            agent_name="main",
-            context={"error_type": type(e).__name__}
-        )
-        
+        logger.error(f"予期しないエラーが発生しました: {type(e).__name__}: {str(e)}", exc_info=True)
+        user_message = _error_handler.handle_unexpected_error(e)
+
         print("\n" + "=" * 60)
         print(f"\n{user_message}\n")
         print("=" * 60)

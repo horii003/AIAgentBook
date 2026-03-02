@@ -1,15 +1,19 @@
 """交通費精算申請エージェント"""
+import logging
 from strands import Agent, tool, ToolContext
 from strands import ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
-from tools.fare_tools import load_fare_data, calculate_fare
+from tools.fare_tools import calculate_fare
 from tools.excel_generator import transportation_excel_generator
 from session.session_manager import SessionManagerFactory
 from handlers.human_approval_hook import HumanApprovalHook
 from handlers.error_handler import LoopLimitError, ErrorHandler
 from prompt.prompt_transportation_expense import _get_transportation_expense_system_prompt
 from handlers.loop_control_hook import LoopControlHook
+from strands.types.exceptions import ContextWindowOverflowException, MaxTokensReachedException
 from config.model_config import ModelConfig
+
+logger = logging.getLogger(__name__)
 
 
 #エージェントの初期化
@@ -83,7 +87,7 @@ def transportation_expense_agent(query: str, tool_context: ToolContext) -> str:
     _error_handler = ErrorHandler()
     
     # ツール呼び出しをログに記録
-    _error_handler.log_info("[transportation_expense_agent] ツールが呼び出されました")
+    logger.info("transportation_expense_agent ツールが呼び出されました")
 
     try:
         # invocation_stateは受付エージェント側でバリデーション済み
@@ -104,32 +108,27 @@ def transportation_expense_agent(query: str, tool_context: ToolContext) -> str:
     
     except LoopLimitError as e:
         # ループ制限エラー
-        return _error_handler.handle_loop_limit_error(
-            e,
-            context={
-                "agent": "transportation_expense_agent",
-                "query": query[:100]  # ユーザー入力の最初の100文字
-            }
-        )
-    
+        logger.warning(f"LoopLimitError が発生しました: {str(e)} | agent: {e.agent_name}")
+        return _error_handler.handle_loop_limit_error(e)
+
+    except ContextWindowOverflowException as e:
+        # コンテキストウィンドウ超過エラー
+        logger.warning(f"ContextWindowOverflowException が発生しました: {str(e)}")
+        return _error_handler.handle_context_window_error(e)
+
+    except MaxTokensReachedException as e:
+        # 最大トークン数到達エラー
+        logger.warning(f"MaxTokensReachedException が発生しました: {str(e)}")
+        return _error_handler.handle_max_tokens_error(e)
+
     except RuntimeError as e:
         # RuntimeError
-        return _error_handler.handle_runtime_error(
-            e,
-            agent_name="transportation_expense_agent",
-            context={
-                "query": query[:100]
-            }
-        )
+        logger.error(f"RuntimeError が発生しました: {str(e)[:100]} | query: {query[:50]}", exc_info=True)
+        return _error_handler.handle_runtime_error(e)
     
     except Exception as e:
         # 予期しないエラー
-        return _error_handler.handle_unexpected_error(
-            e,
-            agent_name="transportation_expense_agent",
-            context={
-                "query": query[:100]
-            }
-        )
+        logger.error(f"予期しないエラーが発生しました: {type(e).__name__}: {str(e)[:100]} | query: {query[:50]}", exc_info=True)
+        return _error_handler.handle_unexpected_error(e)
 
 
