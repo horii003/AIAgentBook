@@ -6,6 +6,7 @@ Excel形式の経費精算申請書を生成する。
 - 「交通費精算申請エージェント(transportation_expense_agent)」：transportation_excel_generatorツールを利用
 
 """
+import logging
 from typing import List, Tuple, Dict
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +18,8 @@ from openpyxl.styles import Font, Alignment, PatternFill
 from pydantic import ValidationError
 from handlers.error_handler import ErrorHandler
 from models.data_models import RouteInput, InvocationState, ReceiptExpenseInput
+
+logger = logging.getLogger(__name__)
 
 
 # ==================== クラスの定義 ====================
@@ -93,24 +96,15 @@ class ExcelGeneratorBase(ABC):
         default_date = datetime.now().strftime("%Y-%m-%d")
         
         if not self.tool_context or not self.tool_context.invocation_state:
-            self._error_handler.log_info(
-                "tool_contextまたはinvocation_stateが存在しません。デフォルト値を使用します。",
-                context={"default_name": default_name, "default_date": default_date}
-            )
+            logger.info("tool_contextまたはinvocation_stateが存在しません。デフォルト値を使用します。")
             return default_name, default_date
         
         try:
             state = InvocationState(**self.tool_context.invocation_state)
-            self._error_handler.log_info(
-                f"申請者情報を取得しました: {state.applicant_name}, {state.application_date}"
-            )
+            logger.info(f"申請者情報を取得しました: {state.applicant_name}, {state.application_date}")
             return state.applicant_name, state.application_date
         except ValidationError as e:
-            self._error_handler.log_error(
-                "ValidationError",
-                f"申請者情報の取得に失敗しました: {str(e)}",
-                context={"invocation_state": self.tool_context.invocation_state}
-            )
+            logger.error(f"申請者情報の取得に失敗しました: {str(e)}", exc_info=True)
             return default_name, default_date
     
     def _prepare_excel_file(self, prefix: str, title: str) -> Tuple[Workbook, Worksheet, Path]:
@@ -123,17 +117,9 @@ class ExcelGeneratorBase(ABC):
         try:
             output_path = Path("output")
             output_path.mkdir(parents=True, exist_ok=True)
-            self._error_handler.log_info(
-                f"出力ディレクトリを確認しました: {output_path}",
-                context={"output_directory": str(output_path)}
-            )
+            logger.info(f"出力ディレクトリを確認しました: {output_path}")
         except OSError as e:
-            self._error_handler.log_error(
-                "DirectoryCreationError",
-                f"出力ディレクトリの作成に失敗しました: {str(e)}",
-                context={"output_directory": str(output_path)},
-                exc_info=True
-            )
+            logger.error(f"出力ディレクトリの作成に失敗しました: {str(e)}", exc_info=True)
             raise
         
         file_path = output_path / filename
@@ -149,20 +135,15 @@ class ExcelGeneratorBase(ABC):
         """ワークブックをファイルに保存する。"""
         try:
             wb.save(file_path)
-            self._error_handler.log_info(
-                f"ファイルを正常に保存しました: {file_path}",
-                context={"file_path": str(file_path)}
-            )
+            logger.info(f"ファイルを正常に保存しました: {file_path}")
             return True, f"申請書を正常に作成しました: {file_path}"
         except (IOError, PermissionError) as e:
-            user_message = self._error_handler.handle_file_save_error(
-                e, context={"file_path": str(file_path)}
-            )
+            logger.error(f"ファイルの保存に失敗しました: {str(e)} | file_path: {file_path}", exc_info=True)
+            user_message = self._error_handler.handle_file_save_error(e)
             return False, user_message
         except Exception as e:
-            user_message = self._error_handler.handle_file_save_error(
-                e, context={"file_path": str(file_path), "error_type": "unexpected"}
-            )
+            logger.error(f"ファイルの保存中に予期しないエラーが発生しました: {str(e)} | file_path: {file_path}", exc_info=True)
+            user_message = self._error_handler.handle_file_save_error(e)
             return False, user_message
     
     def _write_title_and_applicant_info(self, ws: Worksheet, title: str, applicant_name: str, application_date: str) -> int:
@@ -223,14 +204,8 @@ class ReceiptExcelGenerator(ExcelGeneratorBase):
     SHEET_TITLE = "経費精算申請書"
     
     def generate(self, store_name: str, amount: float, date: str, items: List[str], expense_category: str) -> Dict:
-        self._error_handler.log_info(
-            "ReceiptExcelGeneratorが呼び出されました",
-            context={
-                "store_name": store_name,
-                "amount": amount,
-                "date": date,
-                "expense_category": expense_category
-            }
+        logger.info(
+            f"ReceiptExcelGeneratorが呼び出されました: store={store_name}, amount={amount}, date={date}"
         )
         
         try:
@@ -247,16 +222,8 @@ class ReceiptExcelGenerator(ExcelGeneratorBase):
                     expense_category=expense_category
                 )
             except ValidationError as e:
-                error_message = self._error_handler.handle_validation_error(
-                    e,
-                    context={
-                        "store_name": store_name,
-                        "amount": amount,
-                        "date": date,
-                        "items": items,
-                        "expense_category": expense_category
-                    }
-                )
+                logger.error(f"入力バリデーションエラー（経費精算申請書）: {str(e)}", exc_info=True)
+                error_message = self._error_handler.handle_validation_error(e)
                 return {
                     "success": False,
                     "file_path": "",
@@ -289,16 +256,7 @@ class ReceiptExcelGenerator(ExcelGeneratorBase):
                 }
         
         except Exception as e:
-            self._error_handler.log_error(
-                "UnexpectedError",
-                f"経費精算申請書の生成中に予期しないエラーが発生しました: {str(e)}",
-                context={
-                    "store_name": store_name,
-                    "amount": amount,
-                    "date": date
-                },
-                exc_info=True
-            )
+            logger.error(f"経費精算申請書の生成中に予期しないエラーが発生しました: {str(e)}", exc_info=True)
             return {
                 "success": False,
                 "file_path": "",
@@ -352,9 +310,8 @@ class TransportationExcelGenerator(ExcelGeneratorBase):
     TRANSPORT_TYPE_MAP = {"train": "電車", "bus": "バス", "taxi": "タクシー", "airplane": "飛行機"}
     
     def generate(self, routes: List[dict]) -> Dict:
-        self._error_handler.log_info(
-            "TransportationExcelGeneratorが呼び出されました",
-            context={"routes_count": len(routes) if routes else 0}
+        logger.info(
+            f"TransportationExcelGeneratorが呼び出されました: routes_count={len(routes) if routes else 0}"
         )
         
         try:
@@ -363,11 +320,7 @@ class TransportationExcelGenerator(ExcelGeneratorBase):
             
             # データバリデーション
             if not routes:
-                self._error_handler.log_error(
-                    "EmptyDataError",
-                    "経路データが空です",
-                    context={"routes": routes}
-                )
+                logger.error("経路データが空です")
                 return {
                     "success": False,
                     "file_path": "",
@@ -382,10 +335,8 @@ class TransportationExcelGenerator(ExcelGeneratorBase):
                     validated_route = RouteInput(**route)
                     validated_routes.append(validated_route)
                 except ValidationError as e:
-                    error_message = self._error_handler.handle_validation_error(
-                        e,
-                        context={"route_index": i+1, "route_data": route}
-                    )
+                    logger.error(f"経路データのバリデーションエラー（交通費申請書）: route_index={i+1}, {str(e)}", exc_info=True)
+                    error_message = self._error_handler.handle_validation_error(e)
                     return {
                         "success": False,
                         "file_path": "",
@@ -396,9 +347,8 @@ class TransportationExcelGenerator(ExcelGeneratorBase):
             # 合計交通費の計算
             total_cost = sum(route.cost for route in validated_routes)
             
-            self._error_handler.log_info(
-                f"経路データの検証が完了しました。合計交通費: ¥{total_cost:,.0f}",
-                context={"routes_count": len(validated_routes), "total_cost": total_cost}
+            logger.info(
+                f"経路データの検証が完了しました。合計交通費: ¥{total_cost:,.0f} ({len(validated_routes)}件)"
             )
             
             # Excelファイルの準備
@@ -429,12 +379,7 @@ class TransportationExcelGenerator(ExcelGeneratorBase):
                 }
         
         except Exception as e:
-            self._error_handler.log_error(
-                "UnexpectedError",
-                f"交通費申請書の生成中に予期しないエラーが発生しました: {str(e)}",
-                context={"routes_count": len(routes) if routes else 0},
-                exc_info=True
-            )
+            logger.error(f"交通費申請書の生成中に予期しないエラーが発生しました: {str(e)}", exc_info=True)
             return {
                 "success": False,
                 "file_path": "",
