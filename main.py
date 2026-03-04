@@ -16,13 +16,18 @@ def _setup_logging():
     """ロギングの初期設定"""
     os.makedirs("logs", exist_ok=True)
 
+    # .envのLOG_LEVELを読み取り、未設定の場合はWARNINGをデフォルトとする
+    log_level_str = os.getenv("LOG_LEVEL", "WARNING").upper()
+    log_level = getattr(logging, log_level_str, logging.WARNING)
+
     logging.basicConfig(
-        level=logging.WARNING,
+        level=log_level,
         format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
         handlers=[
             logging.FileHandler("logs/error.log", encoding="utf-8"),
+            logging.StreamHandler(),  # コンソールにも出力
         ]
-    )
+    )  
 
 # ========== 以下、メイン関数 ==========
 def main():
