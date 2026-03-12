@@ -50,6 +50,7 @@ class RouteInput(BaseModel):
     date: str = Field(..., description="日付（YYYY-MM-DD形式）")
     transport_type: Literal["train", "bus", "taxi", "airplane", "電車", "バス", "タクシー", "飛行機"] = Field(..., description="交通手段")
     cost: float = Field(..., ge=0, description="費用")
+    business_purpose: str = Field(..., min_length=1, description="業務目的")
     notes: Optional[str] = Field(None, description="備考")
     
     _validate_date = field_validator("date")(validate_date_string)
@@ -86,6 +87,7 @@ class ReceiptExpenseInput(BaseModel):
     date: str = Field(..., description="購入日（YYYY-MM-DD形式）")
     items: List[str] = Field(..., min_length=1, description="品目リスト")
     expense_category: str = Field(..., min_length=1, description="経費区分")
+    business_purpose: str = Field(..., min_length=1, description="業務目的")
     
     _validate_date = field_validator("date")(validate_date_string)
 

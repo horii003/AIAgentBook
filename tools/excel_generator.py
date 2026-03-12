@@ -41,6 +41,7 @@ class ExcelStyleManager:
             "label_fill": PatternFill(start_color="CCE5FF", end_color="CCE5FF", fill_type="solid"),
             "data_alignment_center": Alignment(horizontal="center", vertical="center"),
             "data_alignment_right": Alignment(horizontal="right", vertical="center"),
+            "data_alignment_left": Alignment(horizontal="left", vertical="center"),
             "total_font": Font(bold=True, size=12),
             "total_alignment": Alignment(horizontal="right", vertical="center"),
             "approval_pending_font": Font(color="008000", bold=True),
@@ -62,12 +63,14 @@ class ExcelStyleManager:
         cell.font = self.styles["label_font"]
         cell.fill = self.styles["label_fill"]
         cell.alignment = self.styles["data_alignment_center"]
-    
     def apply_data_style(self, cell, alignment: str = "center") -> None:
         """セルにデータスタイルを適用する。"""
         if alignment == "right":
             cell.alignment = self.styles["data_alignment_right"]
+        elif alignment == "left":
+            cell.alignment = self.styles["data_alignment_left"]
         else:
+            cell.alignment = self.styles["data_alignment_center"]
             cell.alignment = self.styles["data_alignment_center"]
     
     def apply_approval_pending_style(self, cell) -> None:
@@ -78,7 +81,7 @@ class ExcelStyleManager:
 class ExcelGeneratorBase(ABC):
     """Excel申請書生成の基底クラス"""
     
-    COLUMN_WIDTHS = {"A": 12, "B": 15, "C": 15, "D": 15, "E": 12, "F": 15, "G": 12}
+    COLUMN_WIDTHS = {"A": 12, "B": 15, "C": 15, "D": 15, "E": 12, "F": 15, "G": 20, "H": 12}
     
     def __init__(self, tool_context: ToolContext):
         self.tool_context = tool_context
@@ -151,7 +154,7 @@ class ExcelGeneratorBase(ABC):
         # タイトル行
         ws["A1"] = title
         self.style_manager.apply_title_style(ws["A1"])
-        ws.merge_cells("A1:G1")
+        ws.merge_cells("A1:H1")
         
         # 申請者情報
         current_row = 3
@@ -177,7 +180,7 @@ class ExcelGeneratorBase(ABC):
     
     def _write_table_header(self, ws: Worksheet, row: int, headers: List[str]) -> int:
         """テーブルヘッダーを書き込み、次の行番号を返す。"""
-        columns = ["A", "B", "C", "D", "E", "F", "G"]
+        columns = ["A", "B", "C", "D", "E", "F", "G", "H"]
         
         for col, header_text in zip(columns, headers):
             cell = ws[f"{col}{row}"]
@@ -187,14 +190,14 @@ class ExcelGeneratorBase(ABC):
         return row + 1
     
     def _write_total_row(self, ws: Worksheet, row: int, label: str, amount: float) -> None:
-        """合計行を書き込む。"""
-        ws[f"E{row}"] = label
-        ws[f"E{row}"].font = self.style_manager.styles["total_font"]
-        ws[f"E{row}"].alignment = self.style_manager.styles["total_alignment"]
-        
-        ws[f"F{row}"] = f"¥{amount:,.0f}"
-        ws[f"F{row}"].font = self.style_manager.styles["total_font"]
-        ws[f"F{row}"].alignment = self.style_manager.styles["total_alignment"]
+        """合計行を書き込む（G列=ラベル, H列=金額）。"""
+        ws[f"G{row}"] = label
+        ws[f"G{row}"].font = self.style_manager.styles["total_font"]
+        ws[f"G{row}"].alignment = self.style_manager.styles["total_alignment"]
+
+        ws[f"H{row}"] = f"¥{amount:,.0f}"
+        ws[f"H{row}"].font = self.style_manager.styles["total_font"]
+        ws[f"H{row}"].alignment = self.style_manager.styles["total_alignment"]
 
 
 class ReceiptExcelGenerator(ExcelGeneratorBase):
@@ -203,7 +206,7 @@ class ReceiptExcelGenerator(ExcelGeneratorBase):
     FILE_PREFIX = "経費精算申請書"
     SHEET_TITLE = "経費精算申請書"
     
-    def generate(self, store_name: str, amount: float, date: str, items: List[str], expense_category: str) -> Dict:
+    def generate(self, store_name: str, amount: float, date: str, items: List[str], expense_category: str, business_purpose: str) -> Dict:
         logger.info(
             f"ReceiptExcelGeneratorが呼び出されました: store={store_name}, amount={amount}, date={date}"
         )
@@ -219,7 +222,8 @@ class ReceiptExcelGenerator(ExcelGeneratorBase):
                     amount=amount,
                     date=date,
                     items=items,
-                    expense_category=expense_category
+                    expense_category=expense_category,
+                    business_purpose=business_purpose
                 )
             except ValidationError as e:
                 logger.error(f"入力バリデーションエラー（経費精算申請書）: {str(e)}", exc_info=True)
@@ -254,7 +258,7 @@ class ReceiptExcelGenerator(ExcelGeneratorBase):
                     "file_path": "",
                     "message": message
                 }
-        
+    
         except Exception as e:
             logger.error(f"経費精算申請書の生成中に予期しないエラーが発生しました: {str(e)}", exc_info=True)
             return {
@@ -269,7 +273,7 @@ class ReceiptExcelGenerator(ExcelGeneratorBase):
         current_row = self._write_title_and_applicant_info(ws, self.SHEET_TITLE, applicant_name, application_date)
         
         # テーブルヘッダーを書き込み
-        headers = ["No", "購入日", "店舗名", "品目", "経費区分", "金額", "承認状況"]
+        headers = ["No", "購入日", "店舗名", "品目", "経費区分", "金額", "業務目的", "承認状況"]
         current_row = self._write_table_header(ws, current_row, headers)
         
         # データ行（1行のみ）
@@ -291,9 +295,12 @@ class ReceiptExcelGenerator(ExcelGeneratorBase):
         ws[f"F{current_row}"] = f"¥{data.amount:,.0f}"
         self.style_manager.apply_data_style(ws[f"F{current_row}"], "right")
         
-        ws[f"G{current_row}"] = "承認待ち"
-        self.style_manager.apply_approval_pending_style(ws[f"G{current_row}"])
-        self.style_manager.apply_data_style(ws[f"G{current_row}"], "center")
+        ws[f"G{current_row}"] = data.business_purpose
+        self.style_manager.apply_data_style(ws[f"G{current_row}"], "left")
+        
+        ws[f"H{current_row}"] = "承認待ち"
+        self.style_manager.apply_approval_pending_style(ws[f"H{current_row}"])
+        self.style_manager.apply_data_style(ws[f"H{current_row}"], "center")
         
         current_row += 1
         
@@ -393,7 +400,7 @@ class TransportationExcelGenerator(ExcelGeneratorBase):
         current_row = self._write_title_and_applicant_info(ws, self.SHEET_TITLE, applicant_name, application_date)
         
         # テーブルヘッダーを書き込み
-        headers = ["No", "日付", "出発地", "目的地", "交通手段", "費用", "承認状況"]
+        headers = ["No", "日付", "出発地", "目的地", "交通手段", "費用", "業務目的", "承認状況"]
         current_row = self._write_table_header(ws, current_row, headers)
         
         # データ行
@@ -417,9 +424,12 @@ class TransportationExcelGenerator(ExcelGeneratorBase):
             ws[f"F{current_row}"] = f"¥{route.cost:,.0f}"
             self.style_manager.apply_data_style(ws[f"F{current_row}"], "right")
             
-            ws[f"G{current_row}"] = "承認待ち"
-            self.style_manager.apply_approval_pending_style(ws[f"G{current_row}"])
-            self.style_manager.apply_data_style(ws[f"G{current_row}"], "center")
+            ws[f"G{current_row}"] = route.business_purpose
+            self.style_manager.apply_data_style(ws[f"G{current_row}"], "left")
+            
+            ws[f"H{current_row}"] = "承認待ち"
+            self.style_manager.apply_approval_pending_style(ws[f"H{current_row}"])
+            self.style_manager.apply_data_style(ws[f"H{current_row}"], "center")
             
             current_row += 1
         
@@ -437,6 +447,7 @@ def receipt_excel_generator(
     date: str,
     items: List[str],
     expense_category: str,
+    business_purpose: str,
     tool_context: ToolContext
 ) -> dict:
     """
@@ -449,6 +460,7 @@ def receipt_excel_generator(
         date: 日付（YYYY-MM-DD形式）
         items: 品目のリスト
         expense_category: 経費区分
+        business_purpose: 業務目的
 
     Returns:
         dict: {
@@ -464,7 +476,8 @@ def receipt_excel_generator(
         amount=amount,
         date=date,
         items=items,
-        expense_category=expense_category
+        expense_category=expense_category,
+        business_purpose=business_purpose
     )
 
 
