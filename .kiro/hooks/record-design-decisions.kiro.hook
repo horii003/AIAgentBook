@@ -1,0 +1,15 @@
+{
+  "enabled": true,
+  "name": "Record Design Decisions",
+  "description": "エージェント停止時に、次セッションへの引き継ぎ情報を .kiro/artifact-workflow/session-context.md に記録する",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "このセッションの作業内容を次のセッションに引き継ぐため、.kiro/artifact-workflow/session-context.md を上書き更新してください。\n\n記録する内容:\n1. 作業中だったタスク・フェーズ（中断した場合は途中状態も含む）\n2. このセッションで確定した重要な決定事項（ユーザーが明示的に採用/却下/修正/指示したもの）\n3. このセッションで指示されたが、まだ実行されていない未完了の指示\n\nフォーマット:\n\n# セッションコンテキスト\n\n## 最終保存日時\nYYYY-MM-DD\n\n## 作業中の内容\n[フェーズ名・成果物名・進捗状況を簡潔に。作業がなければ「なし」]\n\n## 確定した決定事項\n[箇条書きで。なければ「なし」]\n\n## 未完了の指示\n[このセッションで指示されたが、まだ実行されていないもの。なければ「なし」]\n\n注意:\n- 議論中・提案段階のものは記録しない\n- 完了済みの指示は記録しない\n- 完了後はユーザーへのメッセージ出力不要\n- ファイル読み込みは最小限に"
+  },
+  "workspaceFolderName": "ai_dlc_prj_6",
+  "shortName": "record-design-decisions"
+}

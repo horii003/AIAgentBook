@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Directory Structure Validator",
+  "description": "srcフォルダ配下のファイルが編集された際に、実装結果（src全体）が00_rule_directory_structureのR1・R2に準拠しているか自動検証する",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "artifacts/06_code-generation/src/**"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "`artifacts/06_code-generation/src/` 配下の**現在のディレクトリ・ファイル構造全体**を走査し、`.kiro/steering/00_rule_directory_structure.md` のR1・R2への準拠を検証してください。\n\n## 手順\n1. `artifacts/06_code-generation/src/` 直下のディレクトリ一覧を取得する\n2. R1で定義された許可ディレクトリ（config/, interfaces/, models/, agents/, handlers/, tools/, prompt/, knowledge/, session/, storage/, data/, template/, sample/, output/, logs/, evals/, docs/, tests/）と照合する\n3. 各ファイルの配置先とファイル名がR2の命名規則に従っているか確認する\n\n## 違反判定\n- **R1違反**: R1に存在しないディレクトリが `src/` 直下に存在する（例: `src/utils/`, `src/lib/` 等）\n- **R2違反**: ファイルが正しいディレクトリに配置されていない、またはファイル名がR2の規則に合致しない（例: `agents/` 内に `myHelper.py` など）\n\n## 出力ルール\n- 違反がある場合のみ、以下の形式で報告する:\n  ```\n  ⚠️ ディレクトリ構造違反が検出されました\n  - [違反内容]: [修正方法]\n  ```\n- **違反がない場合は何も出力しない**"
+  }
+}

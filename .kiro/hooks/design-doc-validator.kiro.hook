@@ -1,0 +1,16 @@
+{
+  "enabled": false,
+  "name": "設計書テンプレート準拠チェック",
+  "description": "設計書が作成または更新された際に、対応するテンプレートに準拠しているか自動確認します",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      ".kiro/specs/**/*.md"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "編集された設計書が対応するテンプレート（.kiro/templates/）に準拠しているか確認してください。不足しているセクションや形式の誤りがあれば指摘してください。"
+  }
+}
