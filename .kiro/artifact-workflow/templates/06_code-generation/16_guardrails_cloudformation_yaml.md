@@ -162,7 +162,7 @@ Resources:
         #     OutputAction: "BLOCK"
 
       # ============================================================
-      # トピックポリシー（GRD-003 に対応、詳細設計書に定義がある場合のみ追加）
+      # トピックポリシー（トピックポリシー定義がある場合のみ追加）
       # ============================================================
       # TopicPolicyConfig:
       #   TopicsConfig:
@@ -206,6 +206,6 @@ Outputs:
 1. **プレースホルダ**: `{xxx}` は全て詳細設計書の対応する定義で置換する
 2. **ContentPolicyConfig**: 詳細設計書のブロック条件に従いフィルタ種別を FiltersConfig に列挙する。`PROMPT_ATTACK` は入力側のみ（OutputStrength は `NONE` 固定、OutputAction は指定しない）
 3. **SensitiveInformationPolicyConfig**: 詳細設計書の対象PII種別を PiiEntitiesConfig に列挙する。Action は設計書の要件に応じて `BLOCK`（全拒否）または `ANONYMIZE`（マスキング）を選択する
-4. **オプショナルな配列プロパティ**: `WordsConfig`, `RegexesConfig`, `TopicPolicyConfig` 等は、使用する場合のみコメントを解除して記述する。**空配列（`[]`）は CFn バリデーションエラーになるため絶対に使用しない**
+4. **オプショナルな配列プロパティ**: `WordsConfig`, `RegexesConfig`, `TopicPolicyConfig` 等は、使用する場合のみコメントを解除して記述する。
 5. **TopicPolicyConfig**: 詳細設計書にトピックポリシーの定義がある場合のみコメントを解除して追加する
 6. **詳細設計書に記載のないプロパティは追加しない**
