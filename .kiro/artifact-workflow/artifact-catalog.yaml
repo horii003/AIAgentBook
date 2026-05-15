@@ -577,7 +577,7 @@ artifacts:
 - id: SD-08
   name: 評価テスト方式設計
   phase: 03_system-design
-  order: 8
+  order: 10
   depends_on:
   - SR-19
   - SR-03
@@ -590,16 +590,51 @@ artifacts:
   - SD-05
   - SD-06
   - SD-07
+  - SD-09
+  - SD-10
   prompt: .kiro/artifact-workflow/prompts/03_system-design/評価テスト方式設計.md
   template: .kiro/artifact-workflow/templates/03_system-design/評価テスト方式設計テンプレート.md
   output: artifacts/03_system-design/outputs/評価テスト方式設計.md
+  artifact_type: document
+  parallel_group: ''
+- id: SD-09
+  name: ログ出力方式設計
+  phase: 03_system-design
+  order: 8
+  depends_on:
+  - SR-14
+  - SR-04
+  - SR-09
+  - SR-06
+  - SD-01
+  - SD-04
+  - SD-05
+  prompt: .kiro/artifact-workflow/prompts/03_system-design/ログ出力方式設計.md
+  template: .kiro/artifact-workflow/templates/03_system-design/ログ出力方式設計テンプレート.md
+  output: artifacts/03_system-design/outputs/ログ出力方式設計.md
+  artifact_type: document
+  parallel_group: ''
+- id: SD-10
+  name: ガードレール処理方式設計
+  phase: 03_system-design
+  order: 9
+  depends_on:
+  - SR-13
+  - SR-05
+  - SR-16
+  - SD-01
+  - SD-04
+  - SD-05
+  prompt: .kiro/artifact-workflow/prompts/03_system-design/ガードレール処理方式設計.md
+  template: .kiro/artifact-workflow/templates/03_system-design/ガードレール処理方式設計テンプレート.md
+  output: artifacts/03_system-design/outputs/ガードレール処理方式設計.md
   artifact_type: document
   parallel_group: ''
 - id: SD-PHASE-REVIEW
   name: 03_system-design フェーズ品質チェック
   phase: 03_system-design
   order: 99
-  depends_on: [SD-01, SD-02, SD-03, SD-04, SD-05, SD-06, SD-07, SD-08]
+  depends_on: [SD-01, SD-02, SD-03, SD-04, SD-05, SD-06, SD-07, SD-08, SD-09, SD-10]
   prompt: ''
   template: ''
   output: ''
@@ -797,9 +832,8 @@ artifacts:
   phase: 05_detailed-design
   order: 6
   depends_on:
-  - SR-13
-  - SR-05
   - SR-16
+  - SD-10
   - DD-02
   prompt: .kiro/artifact-workflow/prompts/05_detailed-design/ガードレール詳細設計.md
   template: .kiro/artifact-workflow/templates/05_detailed-design/ガードレール詳細設計テンプレート.md
@@ -963,6 +997,8 @@ phases:
   - SD-05
   - SD-06
   - SD-07
+  - SD-09
+  - SD-10
   - SD-08
   - SD-PHASE-REVIEW
 - phase: 04_basic-design
