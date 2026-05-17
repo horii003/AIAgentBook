@@ -1,37 +1,40 @@
 """エージェント共通ユーティリティ
 
-全専門エージェントで共有するヘルパー関数・定数を定義する。
+専門エージェントの生成・呼び出しに共通する処理を集約する。
 """
+
 import logging
-from datetime import datetime
 from typing import Callable
+
 from dateutil.relativedelta import relativedelta
-from strands import Agent, ToolContext, ModelRetryStrategy
+from dateutil import parser as date_parser
+from strands import Agent, ModelRetryStrategy
 from strands.agent.conversation_manager import SlidingWindowConversationManager
+
+from config.model_config import ModelConfig
+from handlers.error_handler import ErrorHandler, LoopLimitError
 from handlers.human_approval_hook import HumanApprovalHook
-from handlers.error_handler import LoopLimitError, ErrorHandler
 from handlers.loop_control_hook import LoopControlHook
 from session.session_manager import SessionManagerFactory
-from config.model_config import ModelConfig
 
 _logger = logging.getLogger(__name__)
 
 
 def calculate_deadline(application_date: str, deadline_months: int) -> str:
-    """申請日から申請期限を計算して返す。
+    """申請日から申請期限基準日を計算する。
 
     Args:
-        application_date: 申請日（YYYY-MM-DD形式）
-        deadline_months: 申請期限（経費発生日からの月数）
+        application_date: 申請日（YYYY-MM-DD）
+        deadline_months: 期限月数
 
     Returns:
-        str: 申請期限（YYYY-MM-DD形式）。パース失敗時は "要確認"。
+        期限基準日（YYYY-MM-DD形式）。パース失敗時は "要確認"
     """
     try:
-        base = datetime.strptime(application_date, "%Y-%m-%d")
-        deadline = base - relativedelta(months=deadline_months)
+        parsed = date_parser.parse(application_date)
+        deadline = parsed - relativedelta(months=deadline_months)
         return deadline.strftime("%Y-%m-%d")
-    except Exception:
+    except (ValueError, TypeError):
         return "要確認"
 
 
@@ -40,99 +43,97 @@ def create_specialist_agent(
     system_prompt: str,
     tools: list,
     agent_name: str,
-    window_size: int,
-    max_iterations: int,
-    max_attempts: int,
-    initial_delay: int,
-    max_delay: int,
+    window_size: int = 20,
+    max_iterations: int = 10,
+    max_attempts: int = 6,
+    initial_delay: int = 4,
+    max_delay: int = 240,
+    target_tools: list[str] | None = None,
 ) -> Agent:
-    """専門エージェントの共通ファクトリー関数。
-
-    Session/HumanApprovalHook/LoopControlHookの生成とAgentインスタンスの
-    組み立てを共通化する。各専門エージェントのビルド関数はこれを呼び出す。
+    """専門エージェントを生成する共通ファクトリ。
 
     Args:
         session_id: セッションID
-        system_prompt: エージェント固有のシステムプロンプト
-        tools: エージェント固有のツールリスト
-        agent_name: LoopControlHook用のエージェント名（ログ表示用）
-        window_size: SlidingWindowConversationManagerのウィンドウサイズ
-        max_iterations: LoopControlHookの最大ループ回数
-        max_attempts: ModelRetryStrategyのリトライ回数
-        initial_delay: ModelRetryStrategyの初期遅延（秒）
-        max_delay: ModelRetryStrategyの最大遅延（秒）
+        system_prompt: システムプロンプト
+        tools: ツール関数リスト
+        agent_name: エージェント表示名
+        window_size: 会話ウィンドウサイズ
+        max_iterations: ReActループ最大回数
+        max_attempts: リトライ最大試行回数
+        initial_delay: リトライ初期遅延（秒）
+        max_delay: リトライ最大遅延（秒）
+        target_tools: 承認対象ツール名リスト（Noneの場合は承認フックなし）
 
     Returns:
-        Agent: 設定済みのAgentインスタンス
+        Agent インスタンス
     """
-    # 承認対象ツール名を自動検出（generate_*_form パターン）
-    approval_tools = [
-        t.__name__ if hasattr(t, "__name__") else str(t)
-        for t in tools
-        if hasattr(t, "__name__") and "form" in t.__name__
-    ]
-
     session_manager = SessionManagerFactory.create_session_manager(session_id)
-    approval_hook = HumanApprovalHook(target_tools=approval_tools)
-    loop_hook = LoopControlHook(max_iterations=max_iterations, agent_name=agent_name)
+    loop_control_hook = LoopControlHook(
+        max_iterations=max_iterations, agent_name=agent_name
+    )
+
+    hooks = []
+    if target_tools:
+        human_approval_hook = HumanApprovalHook(target_tools=target_tools)
+        hooks.append(human_approval_hook)
+    hooks.append(loop_control_hook)
 
     return Agent(
         model=ModelConfig.get_model(),
         system_prompt=system_prompt,
-        callback_handler=None,
         tools=tools,
+        agent_id=agent_name.replace(" ", "_").lower(),
+        name=agent_name,
+        description=f"{agent_name}の処理を実行する",
         conversation_manager=SlidingWindowConversationManager(
             window_size=window_size,
             should_truncate_results=True,
             per_turn=False,
         ),
+        callback_handler=None,
         retry_strategy=ModelRetryStrategy(
             max_attempts=max_attempts,
             initial_delay=initial_delay,
             max_delay=max_delay,
         ),
-        hooks=[approval_hook, loop_hook],
         session_manager=session_manager,
+        hooks=hooks,
     )
 
 
 def invoke_specialist_agent(
     query: str,
-    tool_context: ToolContext,
+    tool_context,
     agent_id: str,
     deadline_months: int,
-    build_agent: Callable[[str, str, str, str], Agent],
+    build_agent: Callable,
 ) -> str:
-    """専門エージェントの共通呼び出しラッパー。
-
-    invocation_stateの取得・deadline計算・Agent呼び出し・例外処理を共通化する。
-    各専門エージェントのツール関数はこれを呼び出す。
+    """専門エージェントを呼び出す共通ラッパー。
 
     Args:
-        query: ユーザーからの入力
-        tool_context: Strands SDKが注入するToolContext
-        agent_id: ログ用エージェントID（例: "AG-002"）
-        deadline_months: 申請期限の月数（settings.*.deadline_months）
-        build_agent: (session_id, applicant_name, application_date, deadline) -> Agentを返すコールバック
+        query: ユーザーからの質問・指示
+        tool_context: ToolContext（invocation_stateを含む）
+        agent_id: エージェントID（ログ用）
+        deadline_months: 申請期限月数
+        build_agent: エージェントビルド関数
 
     Returns:
-        str: エージェントからの応答
+        エージェントの応答文字列またはエラーメッセージ
     """
     state = tool_context.invocation_state
+    session_id = state.get("session_id", "")
     applicant_name = state.get("applicant_name", "")
     application_date = state.get("application_date", "")
-    session_id = state.get("session_id", "")
+    deadline = calculate_deadline(application_date, deadline_months)
 
-    _logger.info(
-        "%sを起動します: applicant_name=%s",
-        agent_id,
-        applicant_name,
+    agent = build_agent(
+        session_id=session_id,
+        applicant_name=applicant_name,
+        application_date=application_date,
+        deadline=deadline,
     )
 
-    deadline = calculate_deadline(application_date, deadline_months)
-    agent = build_agent(session_id, applicant_name, application_date, deadline)
-
-    # 子エージェントへはsession_idを除いて渡す
+    # 子エージェントにはsession_idを除いた情報のみ伝播
     child_invocation_state = {
         "applicant_name": applicant_name,
         "application_date": application_date,
@@ -143,16 +144,11 @@ def invoke_specialist_agent(
         return str(response)
     except LoopLimitError as e:
         _logger.warning(
-            "ループ上限に達しました: %s, query=%s",
-            agent_id,
-            query[:50],
+            "ループ制限到達: agent_id=%s, query=%s", agent_id, query[:50]
         )
         return ErrorHandler.handle_loop_limit_error(e)
     except Exception as e:
         _logger.error(
-            "予期しないエラーが発生しました: %s, query=%s",
-            agent_id,
-            query[:50],
-            exc_info=True,
+            "%sエラー: %s, query=%s", agent_id, e, query[:50], exc_info=True
         )
         return ErrorHandler.handle_unexpected_error(e)

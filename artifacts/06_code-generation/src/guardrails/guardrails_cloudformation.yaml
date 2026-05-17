@@ -1,103 +1,56 @@
-AWSTemplateFormatVersion: "2010-09-09"
-Description: "経費精算申請マルチエージェントシステム用ガードレール"
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Amazon Bedrock Guardrail for expense claim agent system
 
 Resources:
-  ExpenseAgentGuardrail:
+  ExpenseClaimGuardrail:
     Type: AWS::Bedrock::Guardrail
     Properties:
-      Name: "expense_agent_guardrail"
-      Description: "経費精算申請エージェント用ガードレール v1"
-
-      BlockedInputMessaging: |
-        申し訳ありません。入力内容が業務の申請処理に適していないため、処理できません。
-        交通費精算申請または経費精算申請に関する内容を入力してください。
-
-      BlockedOutputsMessaging: |
-        申し訳ありません。そのような種類のコンテンツは生成できません。
-        他にお手伝いできることがあればお知らせください。
-
+      Name: expense-claim-agent-guardrail
+      Description: 経費精算申請エージェントシステム用ガードレール
+      BlockedInputMessaging: この入力は許可されていません。業務に関連する内容を入力してください。
+      BlockedOutputsMessaging: この応答は生成できません。別の方法でお試しください。
       ContentPolicyConfig:
-        ContentFiltersTierConfig:
-          TierName: "STANDARD"
         FiltersConfig:
-          - Type: "VIOLENCE"
-            InputStrength: "HIGH"
-            OutputStrength: "HIGH"
-            InputAction: "BLOCK"
-            OutputAction: "BLOCK"
-
-          - Type: "PROMPT_ATTACK"
-            InputStrength: "HIGH"
-            OutputStrength: "NONE"
-            InputAction: "BLOCK"
-
-          - Type: "MISCONDUCT"
-            InputStrength: "HIGH"
-            OutputStrength: "HIGH"
-            InputAction: "BLOCK"
-            OutputAction: "BLOCK"
-
-          - Type: "HATE"
-            InputStrength: "HIGH"
-            OutputStrength: "HIGH"
-            InputAction: "BLOCK"
-            OutputAction: "BLOCK"
-
-          - Type: "SEXUAL"
-            InputStrength: "HIGH"
-            OutputStrength: "HIGH"
-            InputAction: "BLOCK"
-            OutputAction: "BLOCK"
-
-          - Type: "INSULTS"
-            InputStrength: "HIGH"
-            OutputStrength: "HIGH"
-            InputAction: "BLOCK"
-            OutputAction: "BLOCK"
-
+          - Type: VIOLENCE
+            InputStrength: HIGH
+            OutputStrength: HIGH
+          - Type: HATE
+            InputStrength: HIGH
+            OutputStrength: HIGH
+          - Type: SEXUAL
+            InputStrength: HIGH
+            OutputStrength: HIGH
+          - Type: INSULTS
+            InputStrength: HIGH
+            OutputStrength: HIGH
+          - Type: MISCONDUCT
+            InputStrength: HIGH
+            OutputStrength: HIGH
+          - Type: PROMPT_ATTACK
+            InputStrength: HIGH
+            OutputStrength: NONE
       WordPolicyConfig:
         ManagedWordListsConfig:
-          - Type: "PROFANITY"
-            InputEnabled: true
-            OutputEnabled: true
-            InputAction: "BLOCK"
-            OutputAction: "BLOCK"
-        WordsConfig: []
-
+          - Type: PROFANITY
+        WordsConfig:
+          - Text: 不正請求
+          - Text: 架空経費
+          - Text: 水増し
       SensitiveInformationPolicyConfig:
         PiiEntitiesConfig:
-          - Type: "CREDIT_DEBIT_CARD_CVV"
-            InputEnabled: true
-            OutputEnabled: true
-            Action: "BLOCK"
-            InputAction: "BLOCK"
-            OutputAction: "BLOCK"
-        RegexesConfig: []
-
-      CrossRegionConfig:
-        GuardrailProfileArn: "arn:aws:bedrock:ap-northeast-1:869935080389:guardrail-profile/apac.guardrail.v1:0"
-
-      Tags:
-        - Key: "Name"
-          Value: "expense_agent_guardrail"
-        - Key: "Region"
-          Value: "ap-northeast-1"
+          - Type: CREDIT_DEBIT_CARD_NUMBER
+            Action: BLOCK
+          - Type: US_SOCIAL_SECURITY_NUMBER
+            Action: BLOCK
+          - Type: EMAIL
+            Action: ANONYMIZE
+          - Type: PHONE
+            Action: ANONYMIZE
 
 Outputs:
   GuardrailId:
-    Description: "Bedrock Guardrail のリソース ID"
-    Value: !GetAtt ExpenseAgentGuardrail.GuardrailId
-    Export:
-      Name: !Sub "${AWS::StackName}-GuardrailId"
-
-  GuardrailArn:
-    Description: "Bedrock Guardrail の ARN"
-    Value: !GetAtt ExpenseAgentGuardrail.GuardrailArn
-    Export:
-      Name: !Sub "${AWS::StackName}-GuardrailArn"
-
+    Description: Guardrail ID
+    Value: !GetAtt ExpenseClaimGuardrail.GuardrailId
   GuardrailVersion:
-    Description: "Bedrock Guardrail のバージョン"
-    Value: !GetAtt ExpenseAgentGuardrail.Version
-    Export:
-      Name: !Sub "${AWS::StackName}-GuardrailVersion"
+    Description: Guardrail Version
+    Value: !GetAtt ExpenseClaimGuardrail.Version

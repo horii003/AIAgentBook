@@ -1,30 +1,20 @@
-"""交通費精算申請シナリオ評価スクリプト
+"""申請種別ルーティング精度評価
 
-AG-001→AG-002の連携フローで交通費精算申請書が正常に生成されるかを評価する。
-EV-002（交通費計算正確性）・EV-003（申請書生成完全性）・EV-005（業務ルール遵守）に対応。
-
-評価レベル: SESSION_LEVEL（マルチターン評価）
-  - StrandsEvalsTelemetry でエージェントの実行スパンを自動キャプチャ
-  - StrandsInMemorySessionMapper でスパンから Session を自動構築
-  - GoalSuccessRateEvaluator が全ターン・全ツール呼び出しを LLM-as-Judge で判定
+評価レベル: TURN_LEVEL
+  - 申請受付窓口エージェント（AG-001）が入力テキストから正しい専門エージェントを選択するかを検証
+  - ToolSelectionAccuracyEvaluator が1ターンのツール選択を LLM-as-Judge で判定
 
 実行方法:
-    python evals/eval_transport_application.py
+    python evals/eval_routing_accuracy.py
 """
 
-import sys
-import os
 import json
 import logging
+import os
+import sys
 import warnings
+
 from dotenv import load_dotenv
-from helpers import (
-    patch_human_approval_hook, create_orchestrator_agent, run_actor_conversation,
-    memory_exporter, get_model, create_invocation_state,
-)
-from strands_evals import Case, Experiment
-from strands_evals.evaluators import GoalSuccessRateEvaluator
-from strands_evals.mappers import StrandsInMemorySessionMapper
 
 # ---- 初期設定（必須・順序固定） ----
 # [1] 標準入出力 UTF-8 設定
@@ -37,6 +27,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # [3] load_dotenv
 load_dotenv()
 # [4] patch_human_approval_hook（load_dotenv の直後に必須）
+from helpers import (
+    create_invocation_state,
+    create_orchestrator_agent,
+    get_model,
+    memory_exporter,
+    patch_human_approval_hook,
+)
+
 patch_human_approval_hook()
 
 # ---- ログ設定 ----
@@ -49,7 +47,7 @@ logging.basicConfig(
     handlers=[
         logging.StreamHandler(),
         logging.FileHandler(
-            os.path.join(_LOGS_DIR, "eval_transport_application.log"),
+            os.path.join(_LOGS_DIR, "eval_routing_accuracy.log"),
             encoding="utf-8",
         ),
     ],
@@ -61,28 +59,45 @@ warnings.filterwarnings("ignore")
 logging.getLogger("strands").setLevel(logging.WARNING)
 logging.getLogger("strands.event_loop.event_loop").setLevel(logging.CRITICAL)
 
+from strands_evals import Case, Experiment
+from strands_evals.evaluators import ToolSelectionAccuracyEvaluator
+from strands_evals.mappers import StrandsInMemorySessionMapper
 
 # ================================================================
 # テストケース定義（Case オブジェクト）
 # ================================================================
 
 EVAL_CASES = [
-    # TC-E2E-001: 交通費精算申請の完全フロー
     Case(
-        name="交通費精算申請_完全フロー",
-        input="電車代を申請したいです",
+        name="交通費精算申請の振り分け",
+        input="電車で渋谷から新宿に移動した交通費を精算したい",
         metadata={
-            "task_description": "交通費精算申請の完全フロー（移動情報収集→交通費計算→申請書生成）が正常に動作すること",
-            "goal": "output/交通費精算申請書_{timestamp}.xlsxが生成され、申請書生成完了メッセージが返されること",
+            "task_description": "交通費精算申請の入力に対してtransport_agentを呼び出すこと",
+            "expected_tool": "transport_agent",
         },
     ),
-    # TC-E2E-003: 申請期限超過時の警告フロー
     Case(
-        name="申請期限超過_警告フロー",
-        input="3ヶ月以上前の電車代を申請したいです",
+        name="経費精算申請の振り分け",
+        input="文房具を購入した領収書を精算したい",
         metadata={
-            "task_description": "申請期限（90日）を超過した移動日に対して警告メッセージが提示されること（BRL-06）",
-            "goal": "申請期限超過の警告メッセージが表示され、ユーザーが継続を選択した場合に処理が継続されること",
+            "task_description": "経費精算申請の入力に対してexpense_agentを呼び出すこと",
+            "expected_tool": "expense_agent",
+        },
+    ),
+    Case(
+        name="判断不能時の選択肢提示",
+        input="精算したいものがある",
+        metadata={
+            "task_description": "曖昧な入力に対して選択肢を提示すること",
+            "expected_tool": "none",
+        },
+    ),
+    Case(
+        name="対象外申請のエスカレーション",
+        input="有給休暇を申請したい",
+        metadata={
+            "task_description": "対象外の申請に対してエスカレーション案内を表示すること",
+            "expected_tool": "none",
         },
     ),
 ]
@@ -92,8 +107,9 @@ EVAL_CASES = [
 # タスク関数（Experiment に渡す）
 # ================================================================
 
+
 def run_eval_task(case: Case) -> dict:
-    """Experiment に渡す task 関数（マルチターン評価）。
+    """Experiment に渡す task 関数（シングルターン評価）。
 
     Args:
         case: strands_evals Case オブジェクト
@@ -108,35 +124,37 @@ def run_eval_task(case: Case) -> dict:
     memory_exporter.clear()
 
     # ---- エージェント作成 ----
-    agent = create_orchestrator_agent(session_id)
+    agent_wrapper = create_orchestrator_agent(session_id)
+    agent = agent_wrapper._agent
 
     # ---- InvocationState ----
     state = create_invocation_state(session_id)
 
-    # ---- ActorSimulator による動的会話実行 ----
-    turns = run_actor_conversation(agent, case, state.model_dump())
+    # ---- シングルターン実行 ----
+    result = agent(case.input, invocation_state=state)
+    response = str(result)
+    logger.info("ケース '%s': response='%s'", case.name, response[:100])
 
     # ---- テレメトリスパンから Session を自動構築 ----
     finished_spans = memory_exporter.get_finished_spans()
     mapper = StrandsInMemorySessionMapper()
     session = mapper.map_to_session(finished_spans, session_id=session_id)
 
-    final_response = turns[-1]["agent_response"] if turns else ""
-
-    return {"output": final_response, "trajectory": session}
+    return {"output": response, "trajectory": session}
 
 
 # ================================================================
 # メイン
 # ================================================================
 
+
 def main():
     print("\n" + "=" * 70)
-    print("交通費精算申請シナリオ評価（GoalSuccessRateEvaluator）")
+    print("申請種別ルーティング精度評価")
     print("=" * 70)
 
-    evaluator = GoalSuccessRateEvaluator(model=get_model())
-    logger.info("GoalSuccessRateEvaluator を初期化しました")
+    evaluator = ToolSelectionAccuracyEvaluator(model=get_model())
+    logger.info("ToolSelectionAccuracyEvaluator を初期化しました")
 
     experiment = Experiment(
         cases=EVAL_CASES,
@@ -145,7 +163,7 @@ def main():
 
     reports = experiment.run_evaluations(run_eval_task)
 
-    report_path = os.path.join(_LOGS_DIR, "eval_transport_application_report.json")
+    report_path = os.path.join(_LOGS_DIR, "eval_routing_accuracy_report.json")
     for report in reports:
         with open(report_path, "w", encoding="utf-8") as f:
             json.dump(report.to_dict(), f, ensure_ascii=False, indent=2)

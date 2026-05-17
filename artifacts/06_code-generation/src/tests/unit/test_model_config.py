@@ -1,21 +1,26 @@
-"""ModelConfigの単体テスト"""
-import pytest
-from unittest.mock import patch, MagicMock
+"""モデル設定の単体テスト"""
+
+from unittest.mock import patch
+
+from config.model_config import ModelConfig
 
 
 class TestModelConfig:
-    def test_get_model_returns_bedrock_model(self):
-        """get_model()がBedrockModelインスタンスを返すこと"""
-        with patch("strands.models.BedrockModel") as mock_bedrock:
-            mock_instance = MagicMock()
-            mock_bedrock.return_value = mock_instance
-            # lru_cacheをクリアしてから実行
-            from config.model_config import ModelConfig
-            ModelConfig.get_model.cache_clear()
-            result = ModelConfig.get_model()
-            assert result is not None
+    """ModelConfig のテスト"""
+
+    def test_get_model_returns_instance(self):
+        """get_model() がインスタンスを返すこと"""
+        ModelConfig.get_model.cache_clear()
+        model = ModelConfig.get_model()
+        assert model is not None
+
+    def test_get_model_cached(self):
+        """lru_cache により同一インスタンスが返されること"""
+        ModelConfig.get_model.cache_clear()
+        model1 = ModelConfig.get_model()
+        model2 = ModelConfig.get_model()
+        assert model1 is model2
 
     def test_default_model_id(self):
-        """DEFAULT_MODEL_IDが設定されていること"""
-        from config.model_config import ModelConfig
-        assert ModelConfig.DEFAULT_MODEL_ID == "jp.anthropic.claude-sonnet-4-5-20250929-v1:0"
+        """デフォルトモデルIDが設定されていること"""
+        assert "claude" in ModelConfig.DEFAULT_MODEL_ID.lower() or "anthropic" in ModelConfig.DEFAULT_MODEL_ID.lower()

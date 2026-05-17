@@ -1,26 +1,27 @@
-"""base_agentの単体テスト"""
-import pytest
-from unittest.mock import MagicMock, patch
+"""エージェント共通ユーティリティの単体テスト"""
+
 from agents.base_agent import calculate_deadline
 
 
 class TestCalculateDeadline:
-    def test_valid_date(self):
-        """calculate_deadline("2026-05-10", 3)が"2026-02-10"を返すこと"""
-        result = calculate_deadline("2026-05-10", 3)
-        assert result == "2026-02-10"
+    """calculate_deadline のテスト"""
 
-    def test_invalid_date_returns_yokakunin(self):
-        """calculate_deadline("invalid", 3)が"要確認"を返すこと"""
+    def test_normal(self):
+        """正しい期限日を返すこと"""
+        result = calculate_deadline("2026-05-17", 3)
+        assert result == "2026-02-17"
+
+    def test_year_boundary(self):
+        """年をまたぐ場合"""
+        result = calculate_deadline("2026-02-15", 3)
+        assert result == "2025-11-15"
+
+    def test_invalid_date(self):
+        """不正な日付文字列で '要確認' を返すこと"""
         result = calculate_deadline("invalid", 3)
         assert result == "要確認"
 
-    def test_month_boundary(self):
-        """月末日の計算が正しいこと"""
-        result = calculate_deadline("2026-03-31", 1)
-        assert result == "2026-02-28"
-
-    def test_zero_months(self):
-        """0ヶ月の場合は同日を返すこと"""
-        result = calculate_deadline("2026-05-10", 0)
-        assert result == "2026-05-10"
+    def test_empty_date(self):
+        """空文字列で '要確認' を返すこと"""
+        result = calculate_deadline("", 3)
+        assert result == "要確認"

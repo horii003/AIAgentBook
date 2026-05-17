@@ -1,185 +1,239 @@
 """データモデルの単体テスト"""
+
 import pytest
 from pydantic import ValidationError
+
 from models.data_models import (
-    TransportCalculatorInput,
-    TransportItem,
-    TransportFormInput,
     ExpenseItem,
-    ExpenseFormInput,
-    validate_station_name,
-    validate_transport_type,
-    validate_expense_category,
+    ExpenseReportInput,
+    ReportOutput,
+    TrainRouteRecord,
+    TransportCalculatorInput,
+    TransportCalculatorOutput,
+    TransportItem,
+    TransportReportInput,
+    normalize_transport_type,
     validate_date_format,
+    validate_station_name,
 )
 
 
 class TestValidateStationName:
-    def test_removes_station_suffix(self):
-        assert validate_station_name("東京駅") == "東京"
+    """validate_station_name のテスト"""
 
-    def test_removes_bus_stop_suffix(self):
-        assert validate_station_name("新宿バス停") == "新宿"
+    def test_normal_station(self):
+        assert validate_station_name("渋谷") == "渋谷"
 
-    def test_removes_airport_suffix(self):
-        assert validate_station_name("羽田空港") == "羽田"
+    def test_remove_suffix(self):
+        assert validate_station_name("渋谷駅") == "渋谷"
 
-    def test_no_suffix(self):
-        assert validate_station_name("東京") == "東京"
+    def test_strip_whitespace(self):
+        assert validate_station_name("  東京  ") == "東京"
 
+    def test_empty_raises(self):
+        with pytest.raises(ValueError):
+            validate_station_name("")
 
-class TestValidateTransportType:
-    def test_train_english(self):
-        assert validate_transport_type("train") == "電車"
-
-    def test_taxi_english(self):
-        assert validate_transport_type("taxi") == "タクシー"
-
-    def test_airplane_english(self):
-        assert validate_transport_type("airplane") == "飛行機"
-
-    def test_bus_english(self):
-        assert validate_transport_type("bus") == "バス"
-
-    def test_unknown_passthrough(self):
-        assert validate_transport_type("自転車") == "自転車"
+    def test_whitespace_only_raises(self):
+        with pytest.raises(ValueError):
+            validate_station_name("   ")
 
 
-class TestValidateExpenseCategory:
-    def test_stationery_normalization(self):
-        assert validate_expense_category("事務用品") == "事務用品費"
+class TestNormalizeTransportType:
+    """normalize_transport_type のテスト"""
 
-    def test_hotel_normalization(self):
-        assert validate_expense_category("ホテル") == "宿泊費"
+    def test_japanese(self):
+        assert normalize_transport_type("電車") == "電車"
+        assert normalize_transport_type("バス") == "バス"
 
-    def test_qualification_normalization(self):
-        assert validate_expense_category("資格") == "資格精算費"
+    def test_english(self):
+        assert normalize_transport_type("train") == "電車"
+        assert normalize_transport_type("bus") == "バス"
+        assert normalize_transport_type("taxi") == "タクシー"
+        assert normalize_transport_type("airplane") == "飛行機"
+        assert normalize_transport_type("plane") == "飛行機"
 
-    def test_other_normalization(self):
-        assert validate_expense_category("その他") == "その他経費"
-
-    def test_unknown_passthrough(self):
-        assert validate_expense_category("交際費") == "交際費"
+    def test_invalid_raises(self):
+        with pytest.raises(ValueError):
+            normalize_transport_type("自転車")
 
 
 class TestValidateDateFormat:
-    def test_valid_date(self):
-        assert validate_date_format("2026-05-10") == "2026-05-10"
+    """validate_date_format のテスト"""
 
-    def test_invalid_date_raises(self):
+    def test_standard_format(self):
+        assert validate_date_format("2026-05-17") == "2026-05-17"
+
+    def test_slash_format(self):
+        assert validate_date_format("2026/05/17") == "2026-05-17"
+
+    def test_invalid_raises(self):
         with pytest.raises(ValueError):
-            validate_date_format("2026/05/10")
+            validate_date_format("invalid-date")
+
+    def test_empty_raises(self):
+        with pytest.raises(ValueError):
+            validate_date_format("")
 
 
 class TestTransportCalculatorInput:
+    """TransportCalculatorInput のテスト"""
+
     def test_valid_input(self):
-        # TC-UNIT-020
-        obj = TransportCalculatorInput(
-            departure="東京", destination="大阪",
-            transport_type="電車", travel_date="2026-05-10"
+        model = TransportCalculatorInput(
+            departure="渋谷駅",
+            destination="新宿",
+            transport_type="train",
+            travel_date="2026-05-17",
         )
-        assert obj.transport_type == "電車"
+        assert model.departure == "渋谷"
+        assert model.destination == "新宿"
+        assert model.transport_type == "電車"
+        assert model.travel_date == "2026-05-17"
 
-    def test_transport_type_normalization(self):
-        # TC-UNIT-021
-        obj = TransportCalculatorInput(
-            departure="東京", destination="大阪",
-            transport_type="train", travel_date="2026-05-10"
-        )
-        assert obj.transport_type == "電車"
-
-    def test_invalid_transport_type(self):
-        # TC-UNIT-022
+    def test_empty_departure_raises(self):
         with pytest.raises(ValidationError):
             TransportCalculatorInput(
-                departure="東京", destination="大阪",
-                transport_type="自転車", travel_date="2026-05-10"
+                departure="",
+                destination="新宿",
+                transport_type="電車",
+                travel_date="2026-05-17",
             )
 
-    def test_station_name_normalization(self):
-        # TC-UNIT-023
-        obj = TransportCalculatorInput(
-            departure="東京駅", destination="大阪駅",
-            transport_type="電車", travel_date="2026-05-10"
-        )
-        assert obj.departure == "東京"
-        assert obj.destination == "大阪"
-
-    def test_invalid_date_format(self):
+    def test_invalid_transport_type_raises(self):
         with pytest.raises(ValidationError):
             TransportCalculatorInput(
-                departure="東京", destination="大阪",
-                transport_type="電車", travel_date="2026/05/10"
+                departure="渋谷",
+                destination="新宿",
+                transport_type="自転車",
+                travel_date="2026-05-17",
             )
+
+    def test_model_dump_normalized(self):
+        model = TransportCalculatorInput(
+            departure="渋谷駅",
+            destination="東京駅",
+            transport_type="train",
+            travel_date="2026/05/17",
+        )
+        data = model.model_dump()
+        assert data["departure"] == "渋谷"
+        assert data["destination"] == "東京"
+        assert data["transport_type"] == "電車"
+        assert data["travel_date"] == "2026-05-17"
+
+
+class TestTransportCalculatorOutput:
+    """TransportCalculatorOutput のテスト"""
+
+    def test_success(self):
+        model = TransportCalculatorOutput(success=True, fare=200)
+        assert model.success is True
+        assert model.fare == 200
+
+    def test_fare_zero_allowed(self):
+        model = TransportCalculatorOutput(success=True, fare=0)
+        assert model.fare == 0
+
+    def test_fare_negative_raises(self):
+        with pytest.raises(ValidationError):
+            TransportCalculatorOutput(success=True, fare=-1)
+
+
+class TestTrainRouteRecord:
+    """TrainRouteRecord のテスト"""
+
+    def test_valid(self):
+        model = TrainRouteRecord(departure="渋谷", destination="新宿", fare=170)
+        assert model.fare == 170
+
+    def test_fare_one_allowed(self):
+        model = TrainRouteRecord(departure="A", destination="B", fare=1)
+        assert model.fare == 1
+
+    def test_fare_zero_raises(self):
+        with pytest.raises(ValidationError):
+            TrainRouteRecord(departure="A", destination="B", fare=0)
 
 
 class TestExpenseItem:
-    def test_valid_expense_category(self):
-        # TC-UNIT-024
+    """ExpenseItem のテスト"""
+
+    def test_valid(self):
         item = ExpenseItem(
-            purchase_date="2026-05-10", item_name="ノート",
-            amount=500, expense_category="事務用品費", purpose="業務用"
+            purchase_date="2026-05-17",
+            store_name="文具店",
+            item_name="ボールペン",
+            expense_category="事務用品費",
+            amount=500,
+            business_purpose="業務用",
         )
-        assert item.expense_category == "事務用品費"
+        assert item.amount == 500
 
-    def test_expense_category_normalization(self):
-        # TC-UNIT-025
+    def test_amount_zero_allowed(self):
         item = ExpenseItem(
-            purchase_date="2026-05-10", item_name="ノート",
-            amount=500, expense_category="事務用品", purpose="業務用"
-        )
-        assert item.expense_category == "事務用品費"
-
-    def test_invalid_expense_category(self):
-        # TC-UNIT-026
-        with pytest.raises(ValidationError):
-            ExpenseItem(
-                purchase_date="2026-05-10", item_name="接待費",
-                amount=5000, expense_category="交際費", purpose="業務用"
-            )
-
-    def test_empty_purpose_raises(self):
-        # TC-UNIT-027
-        with pytest.raises(ValidationError):
-            ExpenseItem(
-                purchase_date="2026-05-10", item_name="ノート",
-                amount=500, expense_category="事務用品費", purpose=""
-            )
-
-    def test_zero_amount_valid(self):
-        # TC-UNIT-029
-        item = ExpenseItem(
-            purchase_date="2026-05-10", item_name="ノート",
-            amount=0, expense_category="事務用品費", purpose="業務用"
+            purchase_date="2026-05-17",
+            store_name="店",
+            item_name="品",
+            expense_category="事務用品費",
+            amount=0,
+            business_purpose="目的",
         )
         assert item.amount == 0
 
-    def test_negative_amount_raises(self):
-        # TC-UNIT-030
+    def test_amount_negative_raises(self):
         with pytest.raises(ValidationError):
             ExpenseItem(
-                purchase_date="2026-05-10", item_name="ノート",
-                amount=-100, expense_category="事務用品費", purpose="業務用"
+                purchase_date="2026-05-17",
+                store_name="店",
+                item_name="品",
+                expense_category="事務用品費",
+                amount=-1,
+                business_purpose="目的",
             )
 
 
-class TestTransportFormInput:
-    def test_empty_items_raises(self):
-        # TC-UNIT-028
-        with pytest.raises(ValidationError):
-            TransportFormInput(
-                applicant_name="田中太郎",
-                application_date="2026-05-10",
-                items=[]
-            )
+class TestExpenseReportInput:
+    """ExpenseReportInput のテスト"""
 
-    def test_valid_input(self):
-        obj = TransportFormInput(
-            applicant_name="田中太郎",
-            application_date="2026-05-10",
-            items=[TransportItem(
-                travel_date="2026-05-10", departure="東京", destination="大阪",
-                transport_type="電車", fare=13240, purpose="出張"
-            )]
+    def test_valid(self):
+        model = ExpenseReportInput(
+            items=[
+                ExpenseItem(
+                    purchase_date="2026-05-17",
+                    store_name="店",
+                    item_name="品",
+                    expense_category="事務用品費",
+                    amount=100,
+                    business_purpose="目的",
+                )
+            ]
         )
-        assert obj.applicant_name == "田中太郎"
+        assert len(model.items) == 1
+
+    def test_empty_list_raises(self):
+        with pytest.raises(ValidationError):
+            ExpenseReportInput(items=[])
+
+
+class TestTransportReportInput:
+    """TransportReportInput のテスト"""
+
+    def test_valid(self):
+        model = TransportReportInput(
+            items=[
+                TransportItem(
+                    travel_date="2026-05-17",
+                    departure="渋谷",
+                    destination="新宿",
+                    transport_type="電車",
+                    fare=170,
+                    business_purpose="打合せ",
+                )
+            ]
+        )
+        assert len(model.items) == 1
+
+    def test_empty_list_raises(self):
+        with pytest.raises(ValidationError):
+            TransportReportInput(items=[])

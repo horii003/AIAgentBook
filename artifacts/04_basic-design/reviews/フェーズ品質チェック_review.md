@@ -1,81 +1,44 @@
----
-version: "1.0.0"
-last_updated: "2026-05-10"
-updated_by: ""
----
+# 04_basic-design フェーズ品質チェック結果
 
-# 04_basic-design フェーズ品質チェック レビュー
+## チェック日時
+2026-05-17
 
-## レビュー結果
+## 判定結果
+✅ 合格
 
-**判定: ✅ 合格**
+## チェック項目
 
-**実施日**: 2026-05-10
+### 1. テンプレート準拠
+- ✅ 交通費計算ツール基本設計.md: テンプレート全セクション準拠
+- ✅ 申請書生成ツール基本設計.md: テンプレート全セクション準拠
+- ✅ データモデル基本設計.md: テンプレート全セクション準拠
+- ✅ 申請受付窓口エージェント基本設計.md: テンプレート全セクション準拠（セクション13除外：Agent as Toolsとして呼ばれないため）
+- ✅ 経費精算申請エージェント基本設計.md: テンプレート全セクション準拠（セクション5除外：オーケストレーターではないため）
+- ✅ 交通費精算申請エージェント基本設計.md: テンプレート全セクション準拠（セクション5除外：オーケストレーターではないため）
+- ✅ ハンドラー基本設計.md: テンプレート全セクション準拠
+- ✅ セッションマネージャ基本設計.md: テンプレート全セクション準拠
 
----
+### 2. システム設計との整合性
+- ✅ 例外処理方針（EX-01〜EX-08）に準拠したエラー対応設計
+- ✅ 実行制御方針に準拠したループ制御（最大10回）・承認制御（OK/修正/キャンセル）
+- ✅ バリデーション方針に準拠したPydantic v2モデル設計
+- ✅ マルチエージェント連携設計に準拠したinvocation_state（辞書リテラル、applicant_name/application_date/session_id）
+- ✅ 共通設定方針に準拠したウィンドウサイズ（AG-001:30, AG-002:15, AG-003:20）
+- ✅ セッション管理方針に準拠したFileSessionManager利用
 
-## 1. テンプレート準拠チェック
+### 3. 次フェーズへの引き継ぎ情報
+- ✅ ツール分割方針確定: TOOL-002 → generate_expense_report / generate_transport_report
+- ✅ データモデルフィールド定義確定: TransportCalculatorInput, ExpenseReportInput, TransportReportInput等
+- ✅ フック登録イベント確定: BeforeInvocationEvent, AfterModelCallEvent, AfterInvocationEvent, BeforeToolCallEvent
+- ✅ ErrorHandlerメソッド一覧確定: handle_validation_error, handle_loop_limit_error, handle_unexpected_error, handle_deadline_error, handle_file_error
+- ✅ セッションID形式確定: session_{YYYYMMDD_HHMMSS}_{8桁ランダム}
 
-| 成果物 | 判定 | 備考 |
-|--------|------|------|
-| 交通費計算ツール基本設計.md | ✅ | 全セクション（1〜17）記載。TL-001形式 |
-| 申請書生成ツール基本設計.md | ✅ | 全セクション記載。ツール分割方針（14.0）明記 |
-| データモデル基本設計.md | ✅ | 全セクション（1〜13）記載。DM-001形式 |
-| 申請受付窓口エージェント基本設計.md | ✅ | 全セクション記載。AG-001形式。専門エージェント連携設計（5章）記載 |
-| 交通費精算申請エージェント基本設計.md | ✅ | 全セクション記載。Agent as Tools設計（13章）記載 |
-| 経費精算申請エージェント基本設計.md | ✅ | 全セクション記載。Agent as Tools設計（13章）記載 |
-| ハンドラー基本設計.md | ✅ | 全セクション記載。HD-001/002/003形式 |
-| セッションマネージャ基本設計.md | ✅ | 全セクション（1〜15）記載。SM-001形式 |
-
----
-
-## 2. システム設計との整合性チェック
-
-| 確認項目 | 判定 | 備考 |
-|---------|------|------|
-| invocation_stateは辞書リテラルで渡す（マルチエージェント連携設計準拠） | ✅ | 全エージェント設計書で確認 |
-| LoopControlHookは全エージェントに登録（実行制御方針準拠） | ✅ | AG-001〜AG-003すべてに登録 |
-| HumanApprovalHookはAG-002・AG-003のみ（自律度・権限定義準拠） | ✅ | AG-001には登録なし（ACT-EXEC-01が×のため） |
-| window_size: AG-001=30、AG-002=20、AG-003=15（共通設定方針準拠） | ✅ | 各エージェント設計書で確認 |
-| TOOL-002はgenerate_transport_form/generate_expense_formに分割 | ✅ | 入力フィールドセットが異なるため分割（ツール分割方針チェックステップ2で確定） |
-| ErrorHandlerは全staticmethod（例外処理方針準拠） | ✅ | ハンドラー基本設計書で確認 |
-| セッションID形式: {YYYYMMDD_HHMMSS}_{8桁ランダム英数字}（セッション管理方針準拠） | ✅ | セッションマネージャ基本設計書で確認 |
-| AG-002/AG-003のプロンプトは動的生成（BRL-06/BRL-15の申請期限チェックのため） | ✅ | 各エージェント設計書7.3節で確認 |
-| AG-001のプロンプトは静的定数（日付ベースの業務ルール判断なし） | ✅ | 申請受付窓口エージェント設計書7.3節で確認 |
-| LoopControlHookのイベント登録: BeforeInvocationEvent+AfterModelCallEvent+AfterInvocationEvent | ✅ | ハンドラー基本設計書3.3節で確認 |
-| HumanApprovalHookのイベント登録: BeforeToolCallEventのみ | ✅ | ハンドラー基本設計書4.3節で確認 |
-| target_tools=["generate_transport_form","generate_expense_form"] | ✅ | ハンドラー基本設計書4.2節で確認 |
-| resetコマンド（reset/リセット/最初から）が対話ループに定義されている | ✅ | 申請受付窓口エージェント設計書10.2節で確認 |
-| 申請書ドラフト提示はツール呼び出しなし（テキスト提示のみ） | ✅ | AG-002/AG-003設計書6.1節・ハンドラー設計書4.1節で確認 |
-| ドラフト提示とツール呼び出しが分離され、HumanApprovalHookが1回のみ発生 | ✅ | AG-002/AG-003設計書4.1/4.2節・ハンドラー設計書4.5節で確認 |
-| HumanApprovalHookはBeforeToolCallEventでトリガー（承認前にツール実行禁止） | ✅ | ハンドラー設計書4.5節で確認 |
-| システム系エラーは呼び出し元エージェント（AG-001）に要約して返す | ✅ | AG-002/AG-003設計書7.2節・9.1節で確認 |
-| 出力ファイルパスはツール内部でdatetime.now().strftime("%Y%m%d%H%M%S")で自律生成 | ✅ | 申請書生成ツール設計書2.2節・2.5節・5.1節・14.1節で確認 |
-| 交通費計算ツールに移動日（travel_date、YYYY-MM-DD形式、必須）パラメータを追加 | ✅ | 交通費計算ツール設計書4.2節・5.2節・12.1節・14.2節で確認 |
-
----
-
-## 3. 次フェーズへの引き継ぎ情報チェック
-
-| 確認項目 | 判定 | 備考 |
-|---------|------|------|
-| 各成果物に「詳細設計への引き渡し事項」が記載されている | ✅ | 全成果物で確認 |
-| ツール関数名・デコレータが明確 | ✅ | calculate_transport_fare/@tool、generate_transport_form/@tool(context=True)、generate_expense_form/@tool(context=True) |
-| ハンドラーのイベント登録が明確 | ✅ | 実在するStrands SDKイベント名のみ使用 |
-| データモデルのフィールド構成が明確 | ✅ | TransportItem・ExpenseItemのフィールドが業務ルール定義と対応 |
-| 申請ルール一覧が各エージェント設計書に記載されている | ✅ | AG-001: BRL-01/02/10/11、AG-002: BRL-03〜09、AG-003: BRL-10〜17 |
-
----
-
-## 4. 指摘事項
-
-なし
-
----
-
-## 5. 変更履歴
-
-| 日付 | 版 | 変更内容 |
-|-----|---|---------|
-| 2026-05-10 | v1.0 | 初版作成 |
-| 2026-05-10 | v1.1 | 修正内容（resetコマンド・ドラフト提示分離・HumanApprovalHook統一・ファイルパス自律生成・移動日パラメータ）を整合性チェックに追加。残存する未定義項目なし |
+## 成果物一覧（8ファイル）
+1. artifacts/04_basic-design/outputs/交通費計算ツール基本設計.md
+2. artifacts/04_basic-design/outputs/申請書生成ツール基本設計.md
+3. artifacts/04_basic-design/outputs/データモデル基本設計.md
+4. artifacts/04_basic-design/outputs/申請受付窓口エージェント基本設計.md
+5. artifacts/04_basic-design/outputs/経費精算申請エージェント基本設計.md
+6. artifacts/04_basic-design/outputs/交通費精算申請エージェント基本設計.md
+7. artifacts/04_basic-design/outputs/ハンドラー基本設計.md
+8. artifacts/04_basic-design/outputs/セッションマネージャ基本設計.md
