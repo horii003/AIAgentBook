@@ -742,18 +742,27 @@
   - 生成方法: datetime.now().strftime("%Y%m%d%H%M%S") + "_" + uuid.uuid4().hex[:8]
   - 生成タイミング: セッション開始時にAG-001が生成する
 
-## 18. フレームワークの実装
+## 18. ファイル構成
+### ファイル名
+　以下のファイル名とすること。レポートについても同様の形に修正すること。
+  - eval_tool_selection.py
+　- eval_goal_success_rate.py
+### タスク実行方式・実行フロー
+　申請種別を判断するテストケースは、シングルターンとすること。経費精算申請のゴールを達成を評価するテストケースは、マルチターンとすること
+  - eval_tool_selection.py：シングルターン
+　- eval_goal_success_rate.py：マルチターン
+
+## 19. 評価フレームワークから利用する概念
 
   - テストケースでは、strands_evals.Caseを利用すること
-  - 申請種別が適切に分類されることを対象に、strands_evals.evaluators.ToolSelectionAccuracyEvaluatorを利用すること
-  - 経費申請のゴールが達成されることを対象に、strands_evals.evaluators.GoalSuccessRateEvaluatorを利用すること
+  - ツール利用の適切性（申請種別が適切に分類されることを対象）に、strands_evals.evaluators.ToolSelectionAccuracyEvaluatorを利用すること
+  - 有用性（目標達成）（経費申請のゴールが達成されることを対象）に、strands_evals.evaluators.GoalSuccessRateEvaluatorを利用すること
   - 実験ではstrands_evals.Experimentを利用すること
   - セッションマッパーでは、strands_evals.mappers.StrandsInMemorySessionMapperを利用すること
   - ユーザーシミュレーターでは、strands_evals.ActorSimulatorを利用すること
   - テレメトリでは、strands_evals.telemetry.StrandsEvalsTelemetryを利用すること
 
-## 19. 各指標のテストケースと件数
-
+## 20. 各指標のテストケース一覧と件数
 
   ### ツール利用の適切性のテストケース
   - 件数: 3件
@@ -763,6 +772,9 @@
   ## 申請種別の判断基準（JD-01/JD-02）
   - transport_agent: 交通費・移動・電車・バス・タクシー・飛行機・出張・通勤 等
   - expense_agent: 経費・購入・備品・宿泊・資格・文具・事務用品 等
+　##申請
+　交通費の経路については、以下のデータを使用してください
+　参照：\materials\06_code-generation\train_fares.json
 
   
   ### 有用性（目標達成）のテストケース
