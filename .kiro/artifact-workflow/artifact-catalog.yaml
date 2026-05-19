@@ -420,7 +420,6 @@ artifacts:
   - SR-03
   - SR-04
   - SR-05
-  - SR-08
   - SR-09
   - SR-16
   prompt: .kiro/artifact-workflow/prompts/02_system-requirements/評価指標一覧.md
@@ -590,8 +589,6 @@ artifacts:
   - SD-04
   - SD-05
   - SD-06
-  - SD-09
-  - SD-10
   prompt: .kiro/artifact-workflow/prompts/03_system-design/評価テスト方式設計.md
   template: .kiro/artifact-workflow/templates/03_system-design/評価テスト方式設計テンプレート.md
   output: artifacts/03_system-design/outputs/評価テスト方式設計.md
