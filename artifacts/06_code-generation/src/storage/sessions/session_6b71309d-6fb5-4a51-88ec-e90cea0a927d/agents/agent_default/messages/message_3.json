@@ -1,0 +1,26 @@
+{
+  "message": {
+    "role": "assistant",
+    "content": [
+      {
+        "text": "ありがとうございます。それでは交通費の自動計算を行います。"
+      },
+      {
+        "toolUse": {
+          "toolUseId": "tooluse_3HW9hUSsdU2s5oLBKoCk6X",
+          "name": "calculate_transport_fare",
+          "input": {
+            "departure": "渋谷",
+            "destination": "新宿",
+            "transport_type": "電車",
+            "travel_date": "2026-05-20"
+          }
+        }
+      }
+    ]
+  },
+  "message_id": 3,
+  "redact_message": null,
+  "created_at": "2026-05-21T06:13:58.068173+00:00",
+  "updated_at": "2026-05-21T06:13:58.068173+00:00"
+}
