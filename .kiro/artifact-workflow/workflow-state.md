@@ -8,7 +8,7 @@
 
 ## 現在のフェーズ
 
-**06_code-generation（未着手）**
+**06_code-generation（完了）**
 
 ---
 
@@ -26,7 +26,7 @@
 | 03_system-design | ✅ 完了 | 第1周 | ✅ 合格 | |
 | 04_basic-design | ✅ 完了 | 第1周 | ✅ 合格 | |
 | 05_detailed-design | ✅ 完了 | 第1周 | ✅ 合格 | |
-| 06_code-generation | 🔲 未着手 | - | 🔲 未実施 | |
+| 06_code-generation | ✅ 完了 | 第1周 | ✅ 合格 | |
 
 ---
 
@@ -110,6 +110,17 @@
 | セッションマネージャ基本設計.md | ✅ 完了 |
 
 ---
+## 成果物別進捗（06_code-generation）
+
+### 06_code-generation
+
+| 成果物 | 状態 |
+|---|---|
+| 実装タスク計画（tasks.md） | ✅ 完了 |
+| コード生成実行（src/） | ✅ 完了 |
+
+---
+
 ## 成果物別進捗（05_detailed-design）
 
 ### 05_detailed-design

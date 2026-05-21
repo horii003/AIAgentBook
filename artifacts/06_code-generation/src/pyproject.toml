@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68.0.0"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "ai-agent-expense-system"
+version = "1.0.0"
+description = "マルチAIエージェントによる経費精算申請システム"
+requires-python = ">=3.10"
+dependencies = [
+    "strands-agents==0.1.6",
+    "strands-agents-tools==0.1.5",
+    "strands-agents-builder==0.1.0",
+    "boto3==1.38.0",
+    "pydantic==2.11.4",
+    "pydantic-settings==2.8.1",
+    "python-dotenv==1.0.1",
+    "python-dateutil==2.9.0",
+    "openpyxl==3.1.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==7.4.4",
+    "pytest-cov==4.1.0",
+    "pytest-mock==3.11.1",
+    "strands-agents-evals==0.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v"
