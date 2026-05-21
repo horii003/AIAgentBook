@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Amazon Bedrock Guardrails for AI Agent Application"
+
+Resources:
+  BedrockGuardrail:
+    Type: AWS::Bedrock::Guardrail
+    Properties:
+      Name: "ai-agent-guardrail"
+      Description: "AIエージェント申請システム用ガードレール"
+
+      # --- 入力ブロック時のフォールバック応答 ---
+      BlockedInputMessaging: "入力内容が安全ポリシーに違反しています。別の内容で再度お試しください。"
+
+      # --- 出力ブロック時のフォールバック応答 ---
+      BlockedOutputsMessaging: "出力内容が安全ポリシーに違反しています。申請管理部門にお問い合わせください。"
+
+      # ============================================================
+      # コンテンツポリシーフィルタ
+      # ============================================================
+      ContentPolicyConfig:
+        FiltersConfig:
+          - Type: "HATE"
+            InputStrength: "MEDIUM"
+            OutputStrength: "MEDIUM"
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+
+          - Type: "INSULTS"
+            InputStrength: "MEDIUM"
+            OutputStrength: "MEDIUM"
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+
+          - Type: "SEXUAL"
+            InputStrength: "MEDIUM"
+            OutputStrength: "MEDIUM"
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+
+          - Type: "VIOLENCE"
+            InputStrength: "MEDIUM"
+            OutputStrength: "MEDIUM"
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+
+          - Type: "MISCONDUCT"
+            InputStrength: "MEDIUM"
+            OutputStrength: "MEDIUM"
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+
+          # 注意: PROMPT_ATTACK は入力側のみ。OutputStrength は "NONE" 固定
+          - Type: "PROMPT_ATTACK"
+            InputStrength: "HIGH"
+            OutputStrength: "NONE"
+            InputAction: "BLOCK"
+
+      # ============================================================
+      # 単語ポリシー
+      # ============================================================
+      WordPolicyConfig:
+        ManagedWordListsConfig:
+          - Type: "PROFANITY"
+            InputEnabled: true
+            OutputEnabled: true
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+
+      # ============================================================
+      # センシティブ情報ポリシー（PII マスキング・ブロック）
+      # ============================================================
+      SensitiveInformationPolicyConfig:
+        PiiEntitiesConfig:
+          - Type: "NAME"
+            Action: "ANONYMIZE"
+            InputEnabled: true
+            OutputEnabled: true
+            InputAction: "ANONYMIZE"
+            OutputAction: "ANONYMIZE"
+
+          - Type: "EMAIL"
+            Action: "ANONYMIZE"
+            InputEnabled: true
+            OutputEnabled: true
+            InputAction: "ANONYMIZE"
+            OutputAction: "ANONYMIZE"
+
+          - Type: "PHONE"
+            Action: "ANONYMIZE"
+            InputEnabled: true
+            OutputEnabled: true
+            InputAction: "ANONYMIZE"
+            OutputAction: "ANONYMIZE"
+
+          - Type: "CREDIT_DEBIT_CARD_CVV"
+            Action: "BLOCK"
+            InputEnabled: true
+            OutputEnabled: true
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+
+      # ============================================================
+      # トピックポリシー（申請種別制限: GRD-004）
+      # ============================================================
+      TopicPolicyConfig:
+        TopicsConfig:
+          - Name: "out-of-scope-requests"
+            Definition: "交通費精算申請・経費精算申請以外の申請種別（例: 有給申請、採用申請、設備申請等）"
+            Type: "DENY"
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+            Examples:
+              - "有給休暇を申請したい"
+              - "採用の申請をしたい"
+
+      # ============================================================
+      # クロスリージョン設定
+      # ============================================================
+      CrossRegionConfig:
+        GuardrailProfileArn: !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:guardrail-profile/apac.guardrail.v1:0"
+
+      Tags:
+        - Key: "Name"
+          Value: "ai-agent-guardrail"
+        - Key: "Region"
+          Value: !Ref AWS::Region
+
+Outputs:
+  GuardrailId:
+    Description: "Bedrock Guardrail のリソース ID"
+    Value: !GetAtt BedrockGuardrail.GuardrailId
+    Export:
+      Name: !Sub "${AWS::StackName}-GuardrailId"
+
+  GuardrailVersion:
+    Description: "Bedrock Guardrail のバージョン"
+    Value: !GetAtt BedrockGuardrail.Version
+    Export:
+      Name: !Sub "${AWS::StackName}-GuardrailVersion"
