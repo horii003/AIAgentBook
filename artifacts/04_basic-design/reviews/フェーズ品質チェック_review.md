@@ -1,44 +1,100 @@
 # 04_basic-design フェーズ品質チェック結果
 
-## チェック日時
-2026-05-17
+実施日: 2026-05-21
 
-## 判定結果
-✅ 合格
+## 品質チェック結果: ✅ 合格
 
-## チェック項目
+---
 
-### 1. テンプレート準拠
-- ✅ 交通費計算ツール基本設計.md: テンプレート全セクション準拠
-- ✅ 申請書生成ツール基本設計.md: テンプレート全セクション準拠
-- ✅ データモデル基本設計.md: テンプレート全セクション準拠
-- ✅ 申請受付窓口エージェント基本設計.md: テンプレート全セクション準拠（セクション13除外：Agent as Toolsとして呼ばれないため）
-- ✅ 経費精算申請エージェント基本設計.md: テンプレート全セクション準拠（セクション5除外：オーケストレーターではないため）
-- ✅ 交通費精算申請エージェント基本設計.md: テンプレート全セクション準拠（セクション5除外：オーケストレーターではないため）
-- ✅ ハンドラー基本設計.md: テンプレート全セクション準拠
-- ✅ セッションマネージャ基本設計.md: テンプレート全セクション準拠
+## 1. テンプレート準拠チェック
 
-### 2. システム設計との整合性
-- ✅ 例外処理方針（EX-01〜EX-08）に準拠したエラー対応設計
-- ✅ 実行制御方針に準拠したループ制御（最大10回）・承認制御（OK/修正/キャンセル）
-- ✅ バリデーション方針に準拠したPydantic v2モデル設計
-- ✅ マルチエージェント連携設計に準拠したinvocation_state（辞書リテラル、applicant_name/application_date/session_id）
-- ✅ 共通設定方針に準拠したウィンドウサイズ（AG-001:30, AG-002:15, AG-003:20）
-- ✅ セッション管理方針に準拠したFileSessionManager利用
+| 成果物 | テンプレート準拠 | 備考 |
+|--------|----------------|------|
+| 交通費計算ツール基本設計.md | ✅ | セクション1〜17 全準拠 |
+| 申請書生成ツール基本設計.md | ✅ | セクション1〜17 全準拠 |
+| データモデル基本設計.md | ✅ | セクション1〜13 全準拠 |
+| 申請受付窓口エージェント基本設計.md | ✅ | セクション1〜17 全準拠 |
+| 交通費精算申請エージェント基本設計.md | ✅ | セクション1〜17 全準拠 |
+| 経費精算申請エージェント基本設計.md | ✅ | セクション1〜17 全準拠 |
+| ハンドラー基本設計.md | ✅ | セクション1〜10 全準拠 |
+| セッションマネージャ基本設計.md | ✅ | セクション1〜15 全準拠 |
 
-### 3. 次フェーズへの引き継ぎ情報
-- ✅ ツール分割方針確定: TOOL-002 → generate_expense_report / generate_transport_report
-- ✅ データモデルフィールド定義確定: TransportCalculatorInput, ExpenseReportInput, TransportReportInput等
-- ✅ フック登録イベント確定: BeforeInvocationEvent, AfterModelCallEvent, AfterInvocationEvent, BeforeToolCallEvent
-- ✅ ErrorHandlerメソッド一覧確定: handle_validation_error, handle_loop_limit_error, handle_unexpected_error, handle_deadline_error, handle_file_error
-- ✅ セッションID形式確定: session_{YYYYMMDD_HHMMSS}_{8桁ランダム}
+---
 
-## 成果物一覧（8ファイル）
-1. artifacts/04_basic-design/outputs/交通費計算ツール基本設計.md
-2. artifacts/04_basic-design/outputs/申請書生成ツール基本設計.md
-3. artifacts/04_basic-design/outputs/データモデル基本設計.md
-4. artifacts/04_basic-design/outputs/申請受付窓口エージェント基本設計.md
-5. artifacts/04_basic-design/outputs/経費精算申請エージェント基本設計.md
-6. artifacts/04_basic-design/outputs/交通費精算申請エージェント基本設計.md
-7. artifacts/04_basic-design/outputs/ハンドラー基本設計.md
-8. artifacts/04_basic-design/outputs/セッションマネージャ基本設計.md
+## 2. システム設計との整合性チェック
+
+| チェック項目 | 結果 | 備考 |
+|------------|------|------|
+| 例外処理方針.md（EX-01〜EX-08）準拠 | ✅ | 各設計書のエラー対応方針に反映 |
+| 実行制御方針.md（LoopControlHook: 最大10回）準拠 | ✅ | ハンドラー基本設計書に記載 |
+| 実行制御方針.md（HumanApprovalHook: TOOL-002呼び出し前）準拠 | ✅ | ハンドラー基本設計書に記載 |
+| バリデーション方針.md（Pydantic v2、field_validator）準拠 | ✅ | データモデル基本設計書に反映 |
+| マルチエージェント連携設計.md（invocation_state は辞書リテラル）準拠 | ✅ | データモデル基本設計書・各エージェント設計書に反映 |
+| 共通設定方針.md（window_size: AG-001=30, AG-002=20, AG-003=15）準拠 | ✅ | 各エージェント設計書に反映 |
+
+---
+
+## 3. 受入基準チェック
+
+### BD-01（ツール基本設計）
+- ✅ ファイル名が機能ツール一覧.mdの「ツール名」列の値をそのまま使用
+- ✅ フレームワーク組み込み機能で実現できるTOOLが設計書に含まれていない（領収書情報抽出・経費区分判断・申請ルール案内は除外）
+- ✅ ツールIDがTL-XXX形式（TL-001, TL-002）
+- ✅ ツール種別が明確に定義（情報取得・実行（成果物生成））
+- ✅ 利用エージェントのエージェントIDと利用目的が記載
+- ✅ エージェント視点での入出力設計が記載
+- ✅ ツール結果の解釈ルールが定義
+- ✅ フォールバック・代替設計が記載
+- ✅ 例外処理方針.mdに準拠したエラー対応が記載
+- ✅ ツール分割方針が明確に記載（申請書生成ツールはAG-002/AG-003でフィールドセットが異なるため分割）
+
+### BD-02（データモデル基本設計）
+- ✅ コンポーネントIDがDM-XXX形式（DM-001）
+- ✅ Pydantic v2を使用したデータモデル設計
+- ✅ データモデルがカテゴリ別に一覧化（ツール入力・ツール出力・マスタデータ）
+- ✅ 共通バリデーターが定義（validate_date_format, normalize_transport_type, normalize_expense_category）
+- ✅ バリデーション方針.mdに準拠したバリデーションルールが記載
+- ✅ invocation_stateのスキーマがマルチエージェント連携設計.mdに準拠（辞書リテラル）
+
+### BD-03（エージェント基本設計）
+- ✅ ファイル名がエージェント一覧.mdの「エージェント名」列の値をそのまま使用
+- ✅ エージェントIDがAG-XXX形式（AG-001, AG-002, AG-003）
+- ✅ エージェント種別が明確に定義（管理/単体）
+- ✅ 自律度・判断権限が自律度・権限定義.mdに準拠
+- ✅ 処理フローの概要が記載
+- ✅ AG-001（オーケストレーター）に専門エージェントとの連携設計が記載
+- ✅ 利用ツールのツールIDと利用目的が記載
+- ✅ 共通設定方針.mdに準拠した設定値が記載
+- ✅ 例外処理方針.mdに準拠したエラー対応方針が記載
+- ✅ バリデーション方針.mdに準拠したバリデーション設計が記載
+- ✅ 業務ルール定義.mdに定義された申請ルールが申請ルール一覧テーブルに引き継がれている
+- ✅ AG-001は静的定数プロンプト、AG-002/AG-003は動的生成関数プロンプト（申請期限チェックのため）
+
+### BD-04（ハンドラー基本設計）
+- ✅ コンポーネントIDがHD-XXX形式（HD-001, HD-002, HD-003）
+- ✅ ハンドラー種別が明確に分類（ErrorHandler/LoopControlHook/HumanApprovalHook）
+- ✅ 利用エージェント・利用ツールがID付きで一覧化
+- ✅ 主要メソッドの一覧が記載
+- ✅ 例外処理方針.md・実行制御方針.mdに準拠した設計方針が記載
+- ✅ フック登録の仕組みと登録するイベントが記載（BeforeInvocationEvent, AfterModelCallEvent, AfterInvocationEvent, BeforeToolCallEvent）
+- ✅ HumanApprovalHookはAG-002/AG-003のみに登録（AG-001は申請書生成なし）
+
+### BD-05（セッションマネージャ基本設計）
+- ✅ コンポーネントIDがSM-XXX形式（SM-001）
+- ✅ セッション管理方針.mdに準拠した設計
+- ✅ クラス概要と主要メソッドが記載
+- ✅ マルチエージェント連携でのセッション共有の仕組みが明確に記載
+- ✅ セッションファイルの保存先パス（storage/sessions/）と命名規則が記載
+
+---
+
+## 4. 次フェーズへの引き継ぎ情報
+
+| 引き継ぎ項目 | 状態 |
+|------------|------|
+| ツール分割方針（generate_transport_expense_form / generate_general_expense_form） | ✅ 確定 |
+| データモデル一覧（TransportCalculatorInput/Output, TransportRecord, TransportExpenseFormInput, ExpenseRecord, GeneralExpenseFormInput, FormGeneratorOutput, TrainFareData, FixedFareData） | ✅ 確定 |
+| エージェントプロンプト生成方式（AG-001: 静的定数、AG-002/AG-003: 動的生成関数） | ✅ 確定 |
+| フック登録対象（LoopControlHook: 全エージェント、HumanApprovalHook: AG-002/AG-003のみ） | ✅ 確定 |
+| セッションID形式（session_{YYYYMMDD_HHMMSS}_{8桁ランダム文字列}） | ✅ 確定 |
+| invocation_stateは辞書リテラルで渡す（専用Pydanticモデルは定義しない） | ✅ 確定 |
