@@ -1,15 +1,19 @@
-"""経費精算業務ルール・経費区分判断基準（KN-004, KN-005）"""
+"""経費精算業務ルール・経費区分判断基準（KN-004, KN-005）
+
+AG-002（経費精算申請エージェント）が参照する業務ルールを提供する。
+他のモジュールに依存しない（純粋なテキスト返却のみ）。
+"""
 
 
 def get_expense_policies(deadline_months: int, approval_threshold: int) -> str:
     """経費精算業務ルールを返す。
 
     Args:
-        deadline_months: 申請期限月数
-        approval_threshold: 上長承認閾値（円）
+        deadline_months: 申請期限月数（settings.expense.deadline_months から取得）
+        approval_threshold: 上長承認閾値（settings.expense.approval_threshold から取得）
 
     Returns:
-        システムプロンプトに組み込む経費精算業務ルールテキスト
+        str: システムプロンプトに組み込む経費精算業務ルールテキスト
     """
     return f"""【経費精算業務ルール】
 BRL-09: 申請期限
@@ -31,7 +35,7 @@ def get_expense_category_policies() -> str:
     """経費区分判断基準を返す。
 
     Returns:
-        システムプロンプトに組み込む経費区分判断基準テキスト
+        str: システムプロンプトに組み込む経費区分判断基準テキスト
     """
     return """【経費区分判断基準（BRL-14）】
 品目から以下の経費区分を自動判断する:

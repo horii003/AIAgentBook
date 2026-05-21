@@ -1,81 +1,73 @@
-"""アプリケーションエントリーポイント
+"""マルチエージェントアプリケーション - メインエントリーポイント
 
-経費精算・交通費精算申請エージェントシステムのメインモジュール。
+経費・交通費精算申請支援システムのエントリーポイント。
 """
-
-import logging
+import sys
 import os
+import logging
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
-
 from dotenv import load_dotenv
 
-from agents.orchestrator_agent import OrchestratorAgent
-from handlers.error_handler import ErrorHandler
+# .envファイルを読み込み
+load_dotenv()
+
+# ログ設定
+_log_level = getattr(logging, os.getenv("LOG_LEVEL", "WARNING").upper(), logging.WARNING)
+os.makedirs("logs", exist_ok=True)
+
+_fmt = "%(asctime)s [%(levelname)s] %(name)s - %(message)s"
+_formatter = logging.Formatter(_fmt)
+
+_app_handler = RotatingFileHandler(
+    "logs/app.log", maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
+)
+_app_handler.setLevel(logging.INFO)
+_app_handler.setFormatter(_formatter)
+
+_error_handler_file = RotatingFileHandler(
+    "logs/error.log", maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
+)
+_error_handler_file.setLevel(logging.ERROR)
+_error_handler_file.setFormatter(_formatter)
+
+_console_handler = logging.StreamHandler()
+_console_handler.setLevel(logging.INFO)
+_console_handler.setFormatter(_formatter)
+
+logging.basicConfig(
+    level=_log_level,
+    handlers=[_console_handler, _app_handler, _error_handler_file],
+)
+
+# Strandsライブラリのログレベル制御（過剰なデバッグ出力を抑制）
+logging.getLogger("strands").setLevel(logging.WARNING)
 
 _logger = logging.getLogger(__name__)
 
-_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s - %(message)s"
-_LOG_DIR = Path("logs")
-_LOG_FILE = _LOG_DIR / "app.log"
-_ERROR_LOG_FILE = _LOG_DIR / "error.log"
-
-
-def _setup_logging() -> None:
-    """ログ設定を構成する"""
-    _LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-    log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-    root_logger = logging.getLogger()
-    root_logger.setLevel(getattr(logging, log_level, logging.INFO))
-
-    # コンソールハンドラー
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    console_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
-    root_logger.addHandler(console_handler)
-
-    # アプリログハンドラー（INFO以上）
-    app_handler = RotatingFileHandler(
-        str(_LOG_FILE), maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
-    )
-    app_handler.setLevel(logging.INFO)
-    app_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
-    root_logger.addHandler(app_handler)
-
-    # エラーログハンドラー（ERROR以上）
-    error_handler = RotatingFileHandler(
-        str(_ERROR_LOG_FILE), maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
-    )
-    error_handler.setLevel(logging.ERROR)
-    error_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
-    root_logger.addHandler(error_handler)
-
-    # Strandsイベントループログレベル制御
-    logging.getLogger("strands").setLevel(logging.WARNING)
-
 
 def main() -> None:
-    """メイン関数"""
-    load_dotenv()
-    _setup_logging()
+    """メイン関数。申請者名を取得してオーケストレーターエージェントを起動する。"""
+    from agents.orchestrator_agent import OrchestratorAgent
+    from handlers.error_handler import ErrorHandler
+    from session.session_manager import SessionManagerFactory
 
-    _logger.info("アプリケーション起動")
+    _logger.info("システム起動")
 
     try:
         applicant_name = input("申請者名を入力してください: ").strip()
-        if not applicant_name:
-            applicant_name = "未入力"
+        session_id = SessionManagerFactory.generate_session_id()
+        _logger.info("セッション開始: session_id=%s, applicant_name=%s", session_id, applicant_name)
 
-        agent = OrchestratorAgent(applicant_name=applicant_name)
-        agent.run()
+        OrchestratorAgent(applicant_name=applicant_name, session_id=session_id).run()
+        _logger.info("システム正常終了")
+
     except KeyboardInterrupt:
-        print(f"\n{ErrorHandler.handle_keyboard_interrupt(KeyboardInterrupt())}")
+        print(ErrorHandler.handle_keyboard_interrupt())
+        _logger.info("システム終了（KeyboardInterrupt）")
     except Exception as e:
-        _logger.error("アプリケーションエラー: %s", e, exc_info=True)
+        _logger.error("システムエラー error=%s", str(e), exc_info=True)
         print(ErrorHandler.handle_unexpected_error(e))
-    finally:
-        _logger.info("アプリケーション終了")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

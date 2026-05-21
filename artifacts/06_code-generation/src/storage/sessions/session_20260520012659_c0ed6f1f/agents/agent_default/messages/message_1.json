@@ -1,0 +1,23 @@
+{
+  "message": {
+    "role": "assistant",
+    "content": [
+      {
+        "text": "承知いたしました。交通費精算申請ですね。\n\n**申請書**: 交通費精算申請書  \n**申請先**: 所属部門の経理担当者\n\nそれでは、交通費精算申請エージェントに処理を引き継ぎます。"
+      },
+      {
+        "toolUse": {
+          "toolUseId": "tooluse_KB73QurmcbsQyIvzoMWow2",
+          "name": "transport_agent",
+          "input": {
+            "query": "交通費精算をしたいです。東京から品川までの通勤です"
+          }
+        }
+      }
+    ]
+  },
+  "message_id": 1,
+  "redact_message": null,
+  "created_at": "2026-05-19T16:27:50.146843+00:00",
+  "updated_at": "2026-05-19T16:27:50.146843+00:00"
+}

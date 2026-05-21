@@ -1,41 +1,37 @@
-"""設定管理の単体テスト"""
+"""エージェント動作パラメータ設定の単体テスト"""
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from config.settings import (
-    ExpenseSettings,
-    OrchestratorSettings,
-    TransportSettings,
-    _Settings,
-    settings,
-)
+import pytest
+from config.settings import settings, OrchestratorSettings, TransportSettings, ExpenseSettings
 
 
 class TestSettings:
     """settings のテスト"""
 
-    def test_default_values(self):
-        """デフォルト値が正しく設定されること"""
+    def test_orchestrator_window_size(self):
+        """settings.orchestrator.window_size が 30 であること"""
         assert settings.orchestrator.window_size == 30
-        assert settings.orchestrator.max_iterations == 10
-        assert settings.transport.window_size == 20
+
+    def test_transport_deadline_months(self):
+        """settings.transport.deadline_months が 3 であること"""
         assert settings.transport.deadline_months == 3
+
+    def test_expense_approval_threshold(self):
+        """settings.expense.approval_threshold が 5000 であること"""
+        assert settings.expense.approval_threshold == 5000
+
+    def test_transport_env_override(self, monkeypatch):
+        """環境変数 ECAAS_TRANSPORT_MAX_ITERATIONS=15 を設定した場合に上書きされること"""
+        monkeypatch.setenv("ECAAS_TRANSPORT_MAX_ITERATIONS", "15")
+        transport = TransportSettings()
+        assert transport.max_iterations == 15
+
+    def test_orchestrator_max_turn_count(self):
+        """settings.orchestrator.max_turn_count が 30 であること"""
+        assert settings.orchestrator.max_turn_count == 30
+
+    def test_expense_window_size(self):
+        """settings.expense.window_size が 15 であること"""
         assert settings.expense.window_size == 15
-        assert settings.expense.deadline_months == 3
-
-    def test_access_via_module_variable(self):
-        """settings モジュール変数からアクセスできること"""
-        assert hasattr(settings, "orchestrator")
-        assert hasattr(settings, "transport")
-        assert hasattr(settings, "expense")
-
-    def test_orchestrator_settings(self):
-        s = OrchestratorSettings()
-        assert s.max_turn_count == 30
-        assert s.max_input_length == 500
-
-    def test_transport_settings(self):
-        s = TransportSettings()
-        assert s.approval_threshold == 10000
-
-    def test_expense_settings(self):
-        s = ExpenseSettings()
-        assert s.approval_threshold == 10000

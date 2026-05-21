@@ -1,0 +1,40 @@
+{
+  "message": {
+    "role": "assistant",
+    "content": [
+      {
+        "text": "承知いたしました。以下の内容で交通費精算申請書を作成いたします。\n\n---\n\n**【交通費精算申請内容】**\n\n**申請者名：** 田中健太  \n**申請日：** 2026年5月21日\n\n**移動明細：**\n\n| No. | 移動日 | 出発地 | 目的地 | 交通手段 | 金額 | 業務目的 |\n|-----|--------|--------|--------|----------|------|----------|\n| 1 | 2026年5月19日 | 渋谷 | 新宿 | 電車 | 170円 | クライアントA社との営業打ち合わせ |\n| 2 | 2026年5月20日 | 新宿 | 池袋 | 電車 | 170円 | クライアントB社へのプレゼンテーション |\n\n**交通費合計：** 340円\n\n---\n\nそれでは申請書（Excel）を生成いたします。"
+      },
+      {
+        "toolUse": {
+          "toolUseId": "tooluse_W75fncDVL8kMHI2Ol1RvIn",
+          "name": "generate_transport_report",
+          "input": {
+            "items": [
+              {
+                "travel_date": "2026-05-19",
+                "departure": "渋谷",
+                "destination": "新宿",
+                "transport_type": "電車",
+                "fare": 170,
+                "business_purpose": "クライアントA社との営業打ち合わせ"
+              },
+              {
+                "travel_date": "2026-05-20",
+                "departure": "新宿",
+                "destination": "池袋",
+                "transport_type": "電車",
+                "fare": 170,
+                "business_purpose": "クライアントB社へのプレゼンテーション"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "message_id": 9,
+  "redact_message": null,
+  "created_at": "2026-05-21T06:19:37.988682+00:00",
+  "updated_at": "2026-05-21T06:19:37.988682+00:00"
+}
