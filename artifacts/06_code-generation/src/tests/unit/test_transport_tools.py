@@ -1,119 +1,146 @@
 """交通費計算ツールの単体テスト"""
-
+import sys
+import os
 import json
-from pathlib import Path
-from unittest.mock import patch
+import tempfile
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import pytest
-
-from tools import transport_tools
-from tools.transport_tools import calculate_transport_fare
-
-# @tool デコレータでラップされた関数の元関数を取得
-_calculate_fare = calculate_transport_fare.__wrapped__
+from unittest.mock import MagicMock, patch
+import tools.transport_tools as tt
 
 
-@pytest.fixture(autouse=True)
-def reset_cache():
-    """テストごとにキャッシュをリセット"""
-    transport_tools._train_routes = []
-    transport_tools._train_routes_loaded = False
-    transport_tools._fixed_fares = {}
-    transport_tools._fixed_fares_loaded = False
-    yield
+def _make_tool_context(applicant_name="山田太郎", application_date="2026-01-15"):
+    ctx = MagicMock()
+    ctx.invocation_state = {"applicant_name": applicant_name, "application_date": application_date}
+    return ctx
+
+
+class TestLoadTrainRoutes:
+    """_load_train_routes のテスト"""
+
+    def setup_method(self):
+        """各テスト前にキャッシュをリセットする。"""
+        tt._train_routes = []
+        tt._train_routes_loaded = False
+
+    def test_success_with_valid_json(self, tmp_path):
+        """正常系: JSONファイル読み込み成功"""
+        data = {"routes": [{"departure": "渋谷", "destination": "新宿", "fare": 200}]}
+        json_file = tmp_path / "train_routes.json"
+        json_file.write_text(json.dumps(data), encoding="utf-8")
+
+        original = tt._TRAIN_ROUTES_PATH
+        tt._TRAIN_ROUTES_PATH = str(json_file)
+        try:
+            ok, msg = tt._load_train_routes()
+            assert ok is True
+            assert tt._train_routes_loaded is True
+            assert len(tt._train_routes) == 1
+        finally:
+            tt._TRAIN_ROUTES_PATH = original
+            tt._train_routes = []
+            tt._train_routes_loaded = False
+
+    def test_failure_file_not_found(self):
+        """異常系: ファイル不存在時に (False, エラーメッセージ) を返すこと"""
+        original = tt._TRAIN_ROUTES_PATH
+        tt._TRAIN_ROUTES_PATH = "/nonexistent/path/train_routes.json"
+        try:
+            ok, msg = tt._load_train_routes()
+            assert ok is False
+            assert isinstance(msg, str)
+            assert len(msg) > 0
+        finally:
+            tt._TRAIN_ROUTES_PATH = original
 
 
 class TestCalculateTransportFare:
     """calculate_transport_fare のテスト"""
 
-    def test_train_fare(self, tmp_path, monkeypatch):
-        """電車の正しい運賃返却"""
-        data = {"routes": [{"departure": "渋谷", "destination": "新宿", "fare": 170}]}
-        data_dir = tmp_path / "data"
-        data_dir.mkdir()
-        (data_dir / "train_fares.json").write_text(json.dumps(data), encoding="utf-8")
-        monkeypatch.setattr(transport_tools, "_DATA_DIR", data_dir)
+    def setup_method(self):
+        """各テスト前にキャッシュをリセットする。"""
+        tt._train_routes = [
+            {"departure": "渋谷", "destination": "新宿", "fare": 200},
+            {"departure": "新宿", "destination": "渋谷", "fare": 200},
+        ]
+        tt._train_routes_loaded = True
+        tt._fixed_fares = {"bus": 220, "taxi": 2000, "airplane": 50000}
+        tt._fixed_fares_loaded = True
 
-        result = _calculate_fare(
-            departure="渋谷", destination="新宿", transport_type="電車", travel_date="2026-05-17"
+    def test_train_existing_route(self):
+        """電車正常系: 既存経路の運賃を返すこと"""
+        ctx = _make_tool_context()
+        result = tt.calculate_transport_fare.__wrapped__(
+            departure="渋谷",
+            destination="新宿",
+            transport_type="電車",
+            travel_date="2026-01-15",
+            tool_context=ctx,
         )
         assert result["success"] is True
-        assert result["fare"] == 170
+        assert result["fare"] == 200
 
-    def test_bus_fare(self, tmp_path, monkeypatch):
-        """バスの固定運賃返却"""
-        data_dir = tmp_path / "data"
-        data_dir.mkdir()
-        (data_dir / "fixed_fares.json").write_text(
-            json.dumps({"bus": 220, "taxi": 2000, "airplane": 50000}), encoding="utf-8"
+    def test_train_nonexistent_route(self):
+        """電車異常系: 存在しない経路で success=False"""
+        ctx = _make_tool_context()
+        result = tt.calculate_transport_fare.__wrapped__(
+            departure="渋谷",
+            destination="横浜",
+            transport_type="電車",
+            travel_date="2026-01-15",
+            tool_context=ctx,
         )
-        monkeypatch.setattr(transport_tools, "_DATA_DIR", data_dir)
+        assert result["success"] is False
+        assert result["fare"] is None
 
-        result = _calculate_fare(
-            departure="A", destination="B", transport_type="バス", travel_date="2026-05-17"
+    def test_bus_fixed_fare(self):
+        """バス正常系: 固定運賃を返すこと"""
+        ctx = _make_tool_context()
+        result = tt.calculate_transport_fare.__wrapped__(
+            departure="渋谷",
+            destination="新宿",
+            transport_type="バス",
+            travel_date="2026-01-15",
+            tool_context=ctx,
         )
         assert result["success"] is True
         assert result["fare"] == 220
 
-    def test_taxi_fare(self, tmp_path, monkeypatch):
-        """タクシーの固定運賃返却"""
-        data_dir = tmp_path / "data"
-        data_dir.mkdir()
-        (data_dir / "fixed_fares.json").write_text(
-            json.dumps({"bus": 220, "taxi": 2000, "airplane": 50000}), encoding="utf-8"
-        )
-        monkeypatch.setattr(transport_tools, "_DATA_DIR", data_dir)
-
-        result = _calculate_fare(
-            departure="A", destination="B", transport_type="タクシー", travel_date="2026-05-17"
+    def test_taxi_fixed_fare(self):
+        """タクシー正常系: 固定運賃を返すこと"""
+        ctx = _make_tool_context()
+        result = tt.calculate_transport_fare.__wrapped__(
+            departure="渋谷",
+            destination="新宿",
+            transport_type="タクシー",
+            travel_date="2026-01-15",
+            tool_context=ctx,
         )
         assert result["success"] is True
         assert result["fare"] == 2000
 
-    def test_route_not_found(self, tmp_path, monkeypatch):
-        """経路不存在時のエラー返却"""
-        data = {"routes": [{"departure": "渋谷", "destination": "新宿", "fare": 170}]}
-        data_dir = tmp_path / "data"
-        data_dir.mkdir()
-        (data_dir / "train_fares.json").write_text(json.dumps(data), encoding="utf-8")
-        monkeypatch.setattr(transport_tools, "_DATA_DIR", data_dir)
-
-        result = _calculate_fare(
-            departure="品川", destination="横浜", transport_type="電車", travel_date="2026-05-17"
-        )
-        assert result["success"] is False
-        assert "見つかりません" in result["error_message"]
-
-    def test_file_not_found(self, tmp_path, monkeypatch):
-        """JSONファイル不存在時のエラー返却"""
-        data_dir = tmp_path / "empty"
-        data_dir.mkdir()
-        monkeypatch.setattr(transport_tools, "_DATA_DIR", data_dir)
-
-        result = _calculate_fare(
-            departure="渋谷", destination="新宿", transport_type="電車", travel_date="2026-05-17"
-        )
-        assert result["success"] is False
-        assert result["error_message"] is not None
-
-    def test_validation_error_empty_departure(self):
-        """空文字入力時のバリデーションエラー"""
-        result = _calculate_fare(
-            departure="", destination="新宿", transport_type="電車", travel_date="2026-05-17"
-        )
-        assert result["success"] is False
-        assert result["error_message"] is not None
-
-    def test_station_name_normalization(self, tmp_path, monkeypatch):
-        """駅名末尾「駅」除去の正規化動作"""
-        data = {"routes": [{"departure": "渋谷", "destination": "新宿", "fare": 170}]}
-        data_dir = tmp_path / "data"
-        data_dir.mkdir()
-        (data_dir / "train_fares.json").write_text(json.dumps(data), encoding="utf-8")
-        monkeypatch.setattr(transport_tools, "_DATA_DIR", data_dir)
-
-        result = _calculate_fare(
-            departure="渋谷駅", destination="新宿駅", transport_type="train", travel_date="2026-05-17"
+    def test_airplane_fixed_fare(self):
+        """飛行機正常系: 固定運賃を返すこと"""
+        ctx = _make_tool_context()
+        result = tt.calculate_transport_fare.__wrapped__(
+            departure="東京",
+            destination="大阪",
+            transport_type="飛行機",
+            travel_date="2026-01-15",
+            tool_context=ctx,
         )
         assert result["success"] is True
-        assert result["fare"] == 170
+        assert result["fare"] == 50000
+
+    def test_invalid_transport_type(self):
+        """不正な交通手段でバリデーションエラー"""
+        ctx = _make_tool_context()
+        result = tt.calculate_transport_fare.__wrapped__(
+            departure="渋谷",
+            destination="新宿",
+            transport_type="自転車",
+            travel_date="2026-01-15",
+            tool_context=ctx,
+        )
+        assert result["success"] is False

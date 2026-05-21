@@ -1,28 +1,9 @@
-"""交通費精算申請エージェント（AG-003）のシステムプロンプト"""
+"""交通費精算申請エージェント（AG-003）のシステムプロンプト
 
-from config.settings import settings
-from knowledge.transport_policies import get_transport_policies
+動的生成関数を提供する。申請者名・申請日・申請期限・業務ルールを埋め込む。
+"""
 
-
-def get_transport_system_prompt(
-    applicant_name: str, application_date: str, deadline_date: str
-) -> str:
-    """交通費精算申請エージェントのシステムプロンプトを動的生成する。
-
-    Args:
-        applicant_name: 申請者名
-        application_date: 申請日（YYYY-MM-DD）
-        deadline_date: 申請期限基準日（YYYY-MM-DD）
-
-    Returns:
-        システムプロンプト文字列
-    """
-    transport_policies = get_transport_policies(
-        deadline_months=settings.transport.deadline_months,
-        approval_threshold=settings.transport.approval_threshold,
-    )
-
-    return f"""あなたは交通費精算申請エージェントです。申請者「{applicant_name}」の交通費精算申請書（Excel）の作成を支援します。
+_TRANSPORT_SYSTEM_PROMPT_TEMPLATE = """あなたは交通費精算申請エージェントです。申請者「{applicant_name}」の交通費精算申請書（Excel）の作成を支援します。
 申請日: {application_date}
 申請期限の基準日（この日付以降の移動日のみ申請可能）: {deadline_date}
 
@@ -42,4 +23,30 @@ def get_transport_system_prompt(
 - 申請書生成前にユーザーの承認を得ずに generate_transport_report を呼び出してはならない
 - 費用をユーザーに確認してはならない（運賃データに該当経路が存在しない場合を除く）
 - ルールに記載のない内容を推測・補完してはならない
-- システム系エラーが発生した場合は、エラー内容を要約して呼び出し元に返却する"""
+- システム系エラーが発生した場合は、エラー内容を要約して呼び出し元に返却する
+"""
+
+
+def get_transport_system_prompt(
+    applicant_name: str,
+    application_date: str,
+    deadline_date: str,
+    transport_policies: str,
+) -> str:
+    """交通費精算申請エージェントのシステムプロンプトを生成する。
+
+    Args:
+        applicant_name: 申請者名
+        application_date: 申請日（YYYY-MM-DD形式）
+        deadline_date: 申請期限基準日（YYYY-MM-DD形式）
+        transport_policies: 交通費精算業務ルールテキスト
+
+    Returns:
+        str: 生成されたシステムプロンプト
+    """
+    return _TRANSPORT_SYSTEM_PROMPT_TEMPLATE.format(
+        applicant_name=applicant_name,
+        application_date=application_date,
+        deadline_date=deadline_date,
+        transport_policies=transport_policies,
+    )

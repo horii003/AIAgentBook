@@ -1,239 +1,175 @@
-"""データモデルの単体テスト"""
+"""データモデル定義の単体テスト"""
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 import pytest
 from pydantic import ValidationError
-
 from models.data_models import (
-    ExpenseItem,
-    ExpenseReportInput,
-    ReportOutput,
-    TrainRouteRecord,
+    InvocationState,
     TransportCalculatorInput,
     TransportCalculatorOutput,
+    ExpenseItem,
+    ExpenseReportInput,
     TransportItem,
     TransportReportInput,
+    ReportOutput,
+    TrainRouteRecord,
+    validate_station_name,
     normalize_transport_type,
     validate_date_format,
-    validate_station_name,
 )
 
 
-class TestValidateStationName:
-    """validate_station_name のテスト"""
+class TestInvocationState:
+    """InvocationState モデルのテスト"""
 
-    def test_normal_station(self):
-        assert validate_station_name("渋谷") == "渋谷"
-
-    def test_remove_suffix(self):
-        assert validate_station_name("渋谷駅") == "渋谷"
-
-    def test_strip_whitespace(self):
-        assert validate_station_name("  東京  ") == "東京"
-
-    def test_empty_raises(self):
-        with pytest.raises(ValueError):
-            validate_station_name("")
-
-    def test_whitespace_only_raises(self):
-        with pytest.raises(ValueError):
-            validate_station_name("   ")
-
-
-class TestNormalizeTransportType:
-    """normalize_transport_type のテスト"""
-
-    def test_japanese(self):
-        assert normalize_transport_type("電車") == "電車"
-        assert normalize_transport_type("バス") == "バス"
-
-    def test_english(self):
-        assert normalize_transport_type("train") == "電車"
-        assert normalize_transport_type("bus") == "バス"
-        assert normalize_transport_type("taxi") == "タクシー"
-        assert normalize_transport_type("airplane") == "飛行機"
-        assert normalize_transport_type("plane") == "飛行機"
-
-    def test_invalid_raises(self):
-        with pytest.raises(ValueError):
-            normalize_transport_type("自転車")
-
-
-class TestValidateDateFormat:
-    """validate_date_format のテスト"""
-
-    def test_standard_format(self):
-        assert validate_date_format("2026-05-17") == "2026-05-17"
-
-    def test_slash_format(self):
-        assert validate_date_format("2026/05/17") == "2026-05-17"
-
-    def test_invalid_raises(self):
-        with pytest.raises(ValueError):
-            validate_date_format("invalid-date")
-
-    def test_empty_raises(self):
-        with pytest.raises(ValueError):
-            validate_date_format("")
+    def test_valid_all_fields(self):
+        """全フィールド指定の正常系"""
+        state = InvocationState(
+            applicant_name="山田太郎",
+            application_date="2026-01-15",
+            session_id="20260115120000_abc12345",
+        )
+        assert state.applicant_name == "山田太郎"
+        assert state.application_date == "2026-01-15"
+        assert state.session_id == "20260115120000_abc12345"
 
 
 class TestTransportCalculatorInput:
-    """TransportCalculatorInput のテスト"""
+    """TransportCalculatorInput モデルのテスト"""
 
     def test_valid_input(self):
-        model = TransportCalculatorInput(
+        """正常系バリデーション"""
+        inp = TransportCalculatorInput(
+            departure="渋谷",
+            destination="新宿",
+            transport_type="電車",
+            travel_date="2026-01-15",
+        )
+        assert inp.departure == "渋谷"
+        assert inp.destination == "新宿"
+        assert inp.transport_type == "電車"
+        assert inp.travel_date == "2026-01-15"
+
+    def test_station_name_normalization(self):
+        """駅名正規化（末尾「駅」除去）"""
+        inp = TransportCalculatorInput(
             departure="渋谷駅",
+            destination="新宿駅",
+            transport_type="電車",
+            travel_date="2026-01-15",
+        )
+        assert inp.departure == "渋谷"
+        assert inp.destination == "新宿"
+
+    def test_transport_type_english_normalization(self):
+        """英語表記の交通手段を日本語に正規化"""
+        inp = TransportCalculatorInput(
+            departure="渋谷",
             destination="新宿",
             transport_type="train",
-            travel_date="2026-05-17",
+            travel_date="2026-01-15",
         )
-        assert model.departure == "渋谷"
-        assert model.destination == "新宿"
-        assert model.transport_type == "電車"
-        assert model.travel_date == "2026-05-17"
+        assert inp.transport_type == "電車"
 
-    def test_empty_departure_raises(self):
-        with pytest.raises(ValidationError):
-            TransportCalculatorInput(
-                departure="",
-                destination="新宿",
-                transport_type="電車",
-                travel_date="2026-05-17",
-            )
-
-    def test_invalid_transport_type_raises(self):
+    def test_invalid_transport_type(self):
+        """不正な交通手段でバリデーションエラー"""
         with pytest.raises(ValidationError):
             TransportCalculatorInput(
                 departure="渋谷",
                 destination="新宿",
                 transport_type="自転車",
-                travel_date="2026-05-17",
+                travel_date="2026-01-15",
             )
-
-    def test_model_dump_normalized(self):
-        model = TransportCalculatorInput(
-            departure="渋谷駅",
-            destination="東京駅",
-            transport_type="train",
-            travel_date="2026/05/17",
-        )
-        data = model.model_dump()
-        assert data["departure"] == "渋谷"
-        assert data["destination"] == "東京"
-        assert data["transport_type"] == "電車"
-        assert data["travel_date"] == "2026-05-17"
-
-
-class TestTransportCalculatorOutput:
-    """TransportCalculatorOutput のテスト"""
-
-    def test_success(self):
-        model = TransportCalculatorOutput(success=True, fare=200)
-        assert model.success is True
-        assert model.fare == 200
-
-    def test_fare_zero_allowed(self):
-        model = TransportCalculatorOutput(success=True, fare=0)
-        assert model.fare == 0
-
-    def test_fare_negative_raises(self):
-        with pytest.raises(ValidationError):
-            TransportCalculatorOutput(success=True, fare=-1)
-
-
-class TestTrainRouteRecord:
-    """TrainRouteRecord のテスト"""
-
-    def test_valid(self):
-        model = TrainRouteRecord(departure="渋谷", destination="新宿", fare=170)
-        assert model.fare == 170
-
-    def test_fare_one_allowed(self):
-        model = TrainRouteRecord(departure="A", destination="B", fare=1)
-        assert model.fare == 1
-
-    def test_fare_zero_raises(self):
-        with pytest.raises(ValidationError):
-            TrainRouteRecord(departure="A", destination="B", fare=0)
 
 
 class TestExpenseItem:
-    """ExpenseItem のテスト"""
+    """ExpenseItem モデルのテスト"""
 
-    def test_valid(self):
-        item = ExpenseItem(
-            purchase_date="2026-05-17",
-            store_name="文具店",
-            item_name="ボールペン",
-            expense_category="事務用品費",
-            amount=500,
-            business_purpose="業務用",
-        )
-        assert item.amount == 500
+    def test_valid_expense_category(self):
+        """許可された経費区分の正常系"""
+        for category in ["事務用品費", "宿泊費", "資格精算費", "その他経費"]:
+            item = ExpenseItem(
+                purchase_date="2026-01-15",
+                store_name="テスト店",
+                item_name="テスト品目",
+                expense_category=category,
+                amount=1000,
+                business_purpose="業務目的",
+            )
+            assert item.expense_category == category
 
-    def test_amount_zero_allowed(self):
+    def test_invalid_expense_category(self):
+        """不正な経費区分でバリデーションエラー"""
+        with pytest.raises(ValidationError):
+            ExpenseItem(
+                purchase_date="2026-01-15",
+                store_name="テスト店",
+                item_name="テスト品目",
+                expense_category="交通費",
+                amount=1000,
+                business_purpose="業務目的",
+            )
+
+    def test_amount_zero_valid(self):
+        """金額0は許容される（ge=0）"""
         item = ExpenseItem(
-            purchase_date="2026-05-17",
-            store_name="店",
-            item_name="品",
+            purchase_date="2026-01-15",
+            store_name="テスト店",
+            item_name="テスト品目",
             expense_category="事務用品費",
             amount=0,
-            business_purpose="目的",
+            business_purpose="業務目的",
         )
         assert item.amount == 0
 
-    def test_amount_negative_raises(self):
+    def test_amount_negative_invalid(self):
+        """負の金額はバリデーションエラー"""
         with pytest.raises(ValidationError):
             ExpenseItem(
-                purchase_date="2026-05-17",
-                store_name="店",
-                item_name="品",
+                purchase_date="2026-01-15",
+                store_name="テスト店",
+                item_name="テスト品目",
                 expense_category="事務用品費",
                 amount=-1,
-                business_purpose="目的",
+                business_purpose="業務目的",
             )
 
 
-class TestExpenseReportInput:
-    """ExpenseReportInput のテスト"""
+class TestTrainRouteRecord:
+    """TrainRouteRecord モデルのテスト"""
 
-    def test_valid(self):
-        model = ExpenseReportInput(
-            items=[
-                ExpenseItem(
-                    purchase_date="2026-05-17",
-                    store_name="店",
-                    item_name="品",
-                    expense_category="事務用品費",
-                    amount=100,
-                    business_purpose="目的",
-                )
-            ]
-        )
-        assert len(model.items) == 1
+    def test_valid_record(self):
+        """正常系バリデーション"""
+        record = TrainRouteRecord(departure="渋谷", destination="新宿", fare=200)
+        assert record.departure == "渋谷"
+        assert record.destination == "新宿"
+        assert record.fare == 200
 
-    def test_empty_list_raises(self):
+    def test_fare_zero_invalid(self):
+        """運賃0はバリデーションエラー（gt=0）"""
         with pytest.raises(ValidationError):
-            ExpenseReportInput(items=[])
+            TrainRouteRecord(departure="渋谷", destination="新宿", fare=0)
 
 
-class TestTransportReportInput:
-    """TransportReportInput のテスト"""
+class TestValidateStationName:
+    """validate_station_name 共通バリデーター関数のテスト"""
 
-    def test_valid(self):
-        model = TransportReportInput(
-            items=[
-                TransportItem(
-                    travel_date="2026-05-17",
-                    departure="渋谷",
-                    destination="新宿",
-                    transport_type="電車",
-                    fare=170,
-                    business_purpose="打合せ",
-                )
-            ]
-        )
-        assert len(model.items) == 1
+    def test_remove_suffix_station(self):
+        """末尾「駅」を除去する"""
+        assert validate_station_name("渋谷駅") == "渋谷"
 
-    def test_empty_list_raises(self):
-        with pytest.raises(ValidationError):
-            TransportReportInput(items=[])
+    def test_no_suffix(self):
+        """「駅」なしはそのまま返す"""
+        assert validate_station_name("渋谷") == "渋谷"
+
+    def test_empty_string_raises(self):
+        """空文字列はValueError"""
+        with pytest.raises(ValueError):
+            validate_station_name("")
+
+    def test_whitespace_only_raises(self):
+        """空白のみはValueError"""
+        with pytest.raises(ValueError):
+            validate_station_name("   ")

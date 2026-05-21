@@ -1,15 +1,19 @@
-"""交通費精算業務ルール（KN-003）"""
+"""交通費精算業務ルール（KN-003）
+
+AG-003（交通費精算申請エージェント）が参照する業務ルールを提供する。
+他のモジュールに依存しない（純粋なテキスト返却のみ）。
+"""
 
 
 def get_transport_policies(deadline_months: int, approval_threshold: int) -> str:
     """交通費精算業務ルールを返す。
 
     Args:
-        deadline_months: 申請期限月数
-        approval_threshold: 上長承認閾値（円）
+        deadline_months: 申請期限月数（settings.transport.deadline_months から取得）
+        approval_threshold: 上長承認閾値（settings.transport.approval_threshold から取得）
 
     Returns:
-        システムプロンプトに組み込む交通費精算業務ルールテキスト
+        str: システムプロンプトに組み込む交通費精算業務ルールテキスト
     """
     return f"""【交通費精算業務ルール】
 BRL-08: 申請期限
