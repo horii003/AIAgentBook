@@ -839,3 +839,203 @@ def generate_output(records: list, tool_context: ToolContext) -> dict:
 
 複数モジュールを組み合わせた連携動作を検証するテストファイルを作成する。
 - モジュールの依存関係は「00_rule_directory_structure.md内のR3. ファイル間の依存関係ルール」セクションを参照する
+
+---
+
+## RE1. 評価テスト ディレクトリ構成
+
+```
+evals/
+├── helpers.py                     # 評価共通ヘルパー
+├── eval_{evaluation_name}.py      # 評価スクリプト（指標ごとに1ファイル）
+└── logs/
+    └── reports/                    # 評価レポート出力先（JSON）
+```
+
+- 評価スクリプトの命名: `eval_{evaluation_name}.py`
+- ログファイル: `evals/logs/eval_{evaluation_name}.log`
+- レポートファイル: `evals/logs/reports/eval_{evaluation_name}_report.json`
+
+---
+
+## RE2. helpers.py の責務
+
+helpers.py は「汎用基盤」と「プロジェクト固有」の2セクションで構成する。
+
+### RE2.1 汎用基盤（プロジェクト非依存）
+
+他のAIエージェント評価プロジェクトでもそのまま再利用できる部分。
+
+| 提供するもの | 責務 |
+|---|---|
+| `telemetry` | `StrandsEvalsTelemetry().setup_in_memory_exporter()` のシングルトン |
+| `memory_exporter` | `telemetry.in_memory_exporter`（スパン収集・クリア用） |
+| `get_model()` | LLM-as-Judge 用の判定モデル取得（エージェント本体と同一モデルを使用する） |
+
+### RE2.2 プロジェクト固有
+
+評価対象エージェントの構成に依存する部分。プロジェクトごとに実装が変わる。
+
+| 提供するもの | 責務 |
+|---|---|
+| `patch_human_approval_hook()` | ブロッキングフックの自動承認差し替え |
+| エージェント生成関数 | 評価対象エージェントを本番同一構成で初期化 |
+| `create_invocation_state()` | 評価用の状態辞書生成 |
+| `run_actor_conversation()` | ActorSimulator によるマルチターン会話実行（マルチターン評価時のみ） |
+
+---
+
+## RE3. eval_*.py の構成順序
+
+各評価スクリプトは以下の順序で構成する。
+
+1. docstring（評価の説明）
+2. 初期設定（UTF-8 → sys.path → load_dotenv）
+3. helpers import → patch 呼び出し（エージェントモジュールより前に実行）
+4. その他 import（strands_evals 等）
+5. ログ設定・warnings抑制・SDKログ抑制
+6. `EVAL_CASES`（テストケース定義）
+7. `run_eval_task()`（タスク関数）
+8. `main()`（実験実行・レポート保存・表示）
+9. `if __name__ == "__main__"`
+
+---
+
+## RE4. テレメトリ管理ルール
+
+### RE4.1 初期化
+
+- テレメトリは helpers.py でモジュールレベルで初期化する（`StrandsEvalsTelemetry().setup_in_memory_exporter()`）
+- eval_*.py 側ではテレメトリ初期化を行わない（helpers を import した時点で完了する）
+
+### RE4.2 trace_attributes（必須）
+
+`StrandsInMemorySessionMapper` を使用する場合、Agent 生成時に以下の `trace_attributes` を**必ず**設定すること。これがないと異なるケースのスパンが混在する。
+
+```python
+agent = Agent(
+    trace_attributes={
+        "session.id": case.session_id,
+        "gen_ai.conversation.id": case.session_id,
+    },
+    ...
+)
+```
+
+### RE4.3 スパン収集パターン
+
+#### シングルターン評価
+
+タスク関数の先頭で `memory_exporter.clear()` → エージェント実行 → `get_finished_spans()` で収集する。
+
+#### マルチターン評価（ActorSimulator 使用時）
+
+`GoalSuccessRateEvaluator` はセッション全体の trajectory を参照してゴール達成を判定する。そのため **会話ループ内で `memory_exporter.clear()` を呼んではならない**。全ターンのスパンを蓄積し、ループ完了後にまとめて Session を構築する。
+
+スパンのケース間混入防止は `run_eval_task` 関数の先頭で `memory_exporter.clear()` を1回だけ呼ぶことで実現する。
+
+```python
+# run_eval_task 内
+memory_exporter.clear()  # 前ケースのスパン混入防止（ケース開始時に1回のみ）
+
+# run_actor_conversation 内（clear しない）
+while user_sim.has_next():
+    agent_response = agent(user_message, ...)
+    # memory_exporter.clear() は呼ばない — 全ターンのスパンを蓄積する
+    user_result = user_sim.act(str(agent_response))
+    user_message = str(user_result.structured_output.message)
+
+# ループ完了後にまとめて収集
+spans = list(memory_exporter.get_finished_spans())
+session = StrandsInMemorySessionMapper().map_to_session(spans, session_id=session_id)
+```
+
+### RE4.4 Session 構築
+
+スパン収集完了後に `StrandsInMemorySessionMapper().map_to_session(all_spans, session_id=case.session_id)` で Session を構築する。
+
+---
+
+## RE5. Strands Evals API 利用規約
+
+### RE5.1 Case の構成
+
+```python
+Case(
+    name="ケース識別名",
+    input="ユーザー入力テキスト",
+    expected_assertion="アサーション文（GoalSuccessRateEvaluator で使用、任意）",
+    metadata={
+        "task_description": "テストの目的説明",
+        "goal": "ゴール基準 or expected_tool: 期待ツール名",
+    },
+)
+```
+
+- `expected_assertion`: GoalSuccessRateEvaluator に明示的な合否基準を与える。設定すると evaluator はゴールを推論せず、この基準で判定する（本プロジェクトでは利用しない）
+- `session_id`: 未指定時は自動生成される UUID
+
+### RE5.2 ActorSimulator
+
+```python
+user_sim = ActorSimulator.from_case_for_user_simulator(
+    case=case,
+    max_turns=10,  # 最大ターン数
+)
+```
+
+- `has_next()`: 会話を継続すべきか判定（ゴール達成 or ターン上限で False）
+- `act(agent_message)`: エージェント応答を受け取り、次のユーザー発話を生成
+- `act()` の戻り値: `user_result.structured_output.message`（次の発話）、`user_result.structured_output.reasoning`（シミュレーターの判断理由）
+- ゴール達成時にシミュレーターは `<stop/>` トークンを含むメッセージを生成し自動停止する
+
+### RE5.3 評価器一覧（プロジェクトで使用するもの）
+
+| 評価器 | 評価レベル | スコア | 用途 |
+|---|---|---|---|
+| `ToolSelectionAccuracyEvaluator` | TOOL_LEVEL | 二値（1.0/0.0） | ツール呼び出しごとに選択の妥当性を判定 |
+| `GoalSuccessRateEvaluator` | SESSION_LEVEL | 二値（1.0/0.0） | セッション全体でゴール達成を判定 |
+
+その他利用可能な評価器（必要に応じて追加）:
+- `HelpfulnessEvaluator`: 応答の有用性（7段階）
+- `FaithfulnessEvaluator`: 会話履歴への忠実性（5段階）
+- `TrajectoryEvaluator`: ツール呼び出し列全体の評価（ルーブリック）
+- `OutputEvaluator`: 最終応答の品質（カスタムルーブリック）
+
+#### RE5.3.1 ToolSelectionAccuracyEvaluator の制約事項
+
+`ToolSelectionAccuracyEvaluator` は LLM-as-Judge がツール選択の妥当性を判定する。判定時に参照される情報はテレメトリスパンから構築された `ToolConfig` オブジェクトだが、**`strands_evals` のマッパー（`StrandsInMemorySessionMapper`）はツール名のみを抽出し、description を伝播しない**（`"description": null` になる）。
+
+そのため、評価 LLM はツール名だけで妥当性を判断する。**ツール名は、その役割が名前だけで一意に推測できるように命名すること**。
+
+| NG（名前だけでは役割が曖昧） | OK（名前だけで役割が明確） |
+|---|---|
+| `transport_agent` + `expense_agent` | `transportation_expense_agent` + `receipt_expense_agent` |
+
+命名のポイント:
+- 複数のツールが類似ドメインを扱う場合、**対象カテゴリの違い**を名前に含める
+- 「精算」のような共通動作ではなく、「何の精算か」が分かる名前にする
+- 評価 LLM が description なしで正しく判定できるかを基準に命名を検証する
+
+### RE5.4 Experiment と Report
+
+```python
+experiment = Experiment(cases=EVAL_CASES, evaluators=[evaluator])
+reports = experiment.run_evaluations(task_function)
+```
+
+- `task_function(case: Case) -> dict`: `{"output": str, "trajectory": Session}` を返す
+- `report.run_display()`: コンソールにスコア・合否・判定理由を表示
+- `report.to_dict()`: JSON シリアライズ可能な辞書を返す
+- 複数評価器を使う場合: `EvaluationReport.flatten(reports)` で結果を統合可能
+
+---
+
+## RE6. 評価テスト品質基準
+
+- プレースホルダー（`{...}` 形式）がコード内に残っていないこと
+- `EVAL_CASES` に設計書記載のすべてのテストケースが含まれていること
+- 評価タイプ（シングルターン / マルチターン）が設計書と一致すること
+- レポートが `ensure_ascii=False, indent=2` で JSON 保存されること
+- Agent 生成時に `trace_attributes` が設定されていること（RE4.2）
+- マルチターン評価で `run_actor_conversation` 内では `memory_exporter.clear()` を呼ばず、全ターンのスパンを蓄積していること（RE4.3）
