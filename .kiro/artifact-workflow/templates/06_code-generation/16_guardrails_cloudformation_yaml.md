@@ -125,25 +125,27 @@ Resources:
           #     CREDIT_DEBIT_CARD_CVV     - CVVコード
           #     CREDIT_DEBIT_CARD_EXPIRY  - カード有効期限
           #     PIN                       - PINコード
-          #     BANK_ACCOUNT_NUMBER       - 銀行口座番号
-          #     BANK_ROUTING              - 銀行ルーティング番号
+          #     INTERNATIONAL_BANK_ACCOUNT_NUMBER - IBAN
           #     SWIFT_CODE                - SWIFTコード
-          #   【医療情報】
-          #     HEALTH_INSURANCE          - 健康保険情報
-          #     MEDICAL_RECORD_NUMBER     - 診療記録番号
-          #     MEDICATION                - 薬剤情報
-          #     TREATMENT_INFORMATION     - 治療情報
-          #   【米国固有】
-          #     US_SOCIAL_SECURITY_NUMBER - 社会保障番号（SSN）
-          #     US_INDIVIDUAL_TAX_IDENTIFICATION_NUMBER - 個人納税者番号（ITIN）
-          #     US_PASSPORT_NUMBER        - パスポート番号
-          #   【その他】
+          #   【IT】
           #     IP_ADDRESS           - IPアドレス
           #     MAC_ADDRESS          - MACアドレス
           #     URL                  - URL
           #     AWS_ACCESS_KEY       - AWSアクセスキー
           #     AWS_SECRET_KEY       - AWSシークレットキー
-          #     INTERNATIONAL_BANK_ACCOUNT_NUMBER - IBAN          
+          #   【米国固有】
+          #     US_BANK_ACCOUNT_NUMBER    - 米国銀行口座番号
+          #     US_BANK_ROUTING_NUMBER    - 米国銀行ルーティング番号
+          #     US_INDIVIDUAL_TAX_IDENTIFICATION_NUMBER - 個人納税者番号（ITIN）
+          #     US_PASSPORT_NUMBER        - パスポート番号
+          #     US_SOCIAL_SECURITY_NUMBER - 社会保障番号（SSN）
+          #   【カナダ固有】
+          #     CA_HEALTH_NUMBER          - カナダ健康サービス番号
+          #     CA_SOCIAL_INSURANCE_NUMBER - カナダ社会保険番号（SIN）
+          #   【英国固有】
+          #     UK_NATIONAL_HEALTH_SERVICE_NUMBER  - 英国国民保健サービス番号
+          #     UK_NATIONAL_INSURANCE_NUMBER       - 英国国民保険番号（NINO）
+          #     UK_UNIQUE_TAXPAYER_REFERENCE_NUMBER - 英国納税者参照番号（UTR）          
           - Type: "{PII種別}"
             Action: "BLOCK"
             InputEnabled: true
