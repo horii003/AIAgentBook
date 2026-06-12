@@ -801,8 +801,7 @@ def generate_output(records: list, tool_context: ToolContext) -> dict:
 | 環境変数名 | 用途 | 設定例 |
 |:---|:---|:---|:---|
 | `LOG_LEVEL` | ログ出力レベル（DEBUG / INFO / WARNING / ERROR / CRITICAL） | `INFO` |
-| `AWS_ACCESS_KEY_ID` | AWS認証用アクセスキーID | — |
-| `AWS_SECRET_ACCESS_KEY` | AWS認証用シークレットアクセスキー | — |
+| `AWS_PROFILE` | AWSプロファイル | aiagent-tutorial |
 | `AWS_DEFAULT_REGION` | AWSデフォルトリージョン | `ap-northeast-1` |
 | `GUARDRAIL_ID` | Amazon Bedrockガードレールの識別子 | — |
 | `GUARDRAIL_VERSION` | Amazon Bedrockガードレールのバージョン | `DRAFT` |
