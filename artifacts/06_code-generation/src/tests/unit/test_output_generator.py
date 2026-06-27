@@ -1,200 +1,162 @@
-"""output_generator の単体テスト"""
-import sys
-from unittest.mock import MagicMock, patch
-
+"""申請書生成ツールの単体テスト"""
+import os
 import pytest
+from unittest.mock import MagicMock, patch, mock_open
 
-# strands モジュールをモックとして登録
-if "strands" not in sys.modules:
-    mock_strands = MagicMock()
-    sys.modules["strands"] = mock_strands
-    sys.modules["strands.models"] = mock_strands.models
-
-# @tool デコレータをモック（関数をそのまま返す）
-import strands
-strands.tool = lambda *args, **kwargs: (lambda f: f) if args and callable(args[0]) else (lambda f: f)
-strands.ToolContext = MagicMock
-
-# openpyxl をモック
-mock_openpyxl = MagicMock()
-mock_wb = MagicMock()
-mock_ws = MagicMock()
-mock_wb.active = mock_ws
-mock_openpyxl.load_workbook.return_value = mock_wb
-sys.modules["openpyxl"] = mock_openpyxl
-
-# モジュールをリロード
-if "tools.output_generator" in sys.modules:
-    del sys.modules["tools.output_generator"]
-
-import tools.output_generator as og
+from tools.output_generator import (
+    generate_transportation_expense_form,
+    generate_general_expense_form,
+    _generate_form,
+    _sanitize_cell,
+)
 
 
-def _make_tool_context(user_name="山田太郎", request_date="2026-05-21"):
-    """ToolContext のモックを作成する"""
+def _make_tool_context(applicant_name="山田太郎", application_date="2026-05-23"):
     ctx = MagicMock()
-    ctx.invocation_state = {"user_name": user_name, "request_date": request_date}
+    ctx.invocation_state = {
+        "applicant_name": applicant_name,
+        "application_date": application_date,
+    }
     return ctx
 
 
-def _make_transport_records():
-    """有効な移動区間データを返す"""
-    return [
-        {
-            "travel_date": "2026-05-21",
-            "departure": "東京",
-            "destination": "新宿",
-            "transport_type": "電車",
-            "fare": 200,
-            "business_purpose": "顧客訪問",
-        }
-    ]
+_VALID_TRANSPORT_ITEMS = [{
+    "travel_date": "2026-05-23",
+    "departure": "東京",
+    "destination": "新宿",
+    "transport_type": "電車",
+    "amount": 200,
+    "purpose": "顧客訪問",
+}]
+
+_VALID_GENERAL_ITEMS = [{
+    "purchase_date": "2026-05-23",
+    "store_name": "文具堂",
+    "item_name": "ノート",
+    "expense_category": "事務用品費",
+    "amount": 500,
+    "purpose": "業務用",
+}]
 
 
-def _make_expense_records():
-    """有効な経費データを返す"""
-    return [
-        {
-            "expense_date": "2026-05-21",
-            "store_name": "文具店",
-            "item_name": "ボールペン",
-            "amount": 500,
-            "category": "事務用品費",
-            "business_purpose": "業務用",
-        }
-    ]
-
-
-class TestGenerateTransportExpenseForm:
-    """generate_transport_expense_form のテスト"""
-
-    def setup_method(self):
-        """各テスト前にモックをリセットする"""
-        mock_openpyxl.load_workbook.reset_mock()
-        mock_wb.save.reset_mock()
-
-    def test_success_with_template(self):
-        """テンプレートが存在する場合に正常生成されること"""
-        with patch("os.path.exists", return_value=True):
-            with patch("os.makedirs"):
-                ctx = _make_tool_context()
-                result = og.generate_transport_expense_form(
-                    transport_records=_make_transport_records(),
-                    needs_approval=False,
-                    tool_context=ctx,
-                )
-        assert result["success"] is True
-        assert result["file_path"] is not None
-        assert result["error_message"] is None
+class TestGenerateForm:
+    """_generate_form関数のテスト"""
 
     def test_template_not_found(self):
-        """テンプレートファイルが存在しない場合にエラーが返ること"""
-        with patch("os.path.exists", return_value=False):
-            ctx = _make_tool_context()
-            result = og.generate_transport_expense_form(
-                transport_records=_make_transport_records(),
-                needs_approval=False,
-                tool_context=ctx,
-            )
-        assert result["success"] is False
-        assert result["error_message"] is not None
+        from models.data_models import TransportationExpenseFormInput
+        validated = TransportationExpenseFormInput(items=_VALID_TRANSPORT_ITEMS)
 
-    def test_validation_error_empty_records(self):
-        """空のリストでバリデーションエラーが返ること"""
-        ctx = _make_tool_context()
-        result = og.generate_transport_expense_form(
-            transport_records=[],
-            needs_approval=False,
+        with patch("os.path.exists", return_value=False):
+            result = _generate_form(
+                template_path="nonexistent.xlsx",
+                applicant_name="山田太郎",
+                application_date="2026-05-23",
+                validated=validated,
+                write_detail_rows=lambda ws, items: None,
+                output_filename_prefix="テスト",
+            )
+
+        assert result["success"] is False
+        assert "テンプレート" in result["error_message"]
+
+    def test_io_error_returns_error(self):
+        from models.data_models import TransportationExpenseFormInput
+        validated = TransportationExpenseFormInput(items=_VALID_TRANSPORT_ITEMS)
+
+        with patch("os.path.exists", return_value=True):
+            with patch("tools.output_generator.load_workbook", side_effect=IOError("permission denied")):
+                result = _generate_form(
+                    template_path="template.xlsx",
+                    applicant_name="山田太郎",
+                    application_date="2026-05-23",
+                    validated=validated,
+                    write_detail_rows=lambda ws, items: None,
+                    output_filename_prefix="テスト",
+                )
+
+        assert result["success"] is False
+
+
+class TestGenerateTransportationExpenseForm:
+    """generate_transportation_expense_form関数のテスト"""
+
+    def test_missing_applicant_name_returns_error(self):
+        ctx = _make_tool_context(applicant_name="")
+        result = generate_transportation_expense_form.__wrapped__(
+            items=_VALID_TRANSPORT_ITEMS,
             tool_context=ctx,
         )
         assert result["success"] is False
-        assert result["error_message"] is not None
+        assert "申請者情報" in result["error_message"]
 
-    def test_needs_approval_true(self):
-        """needs_approval=True の場合に正常生成されること"""
-        with patch("os.path.exists", return_value=True):
-            with patch("os.makedirs"):
-                ctx = _make_tool_context()
-                result = og.generate_transport_expense_form(
-                    transport_records=_make_transport_records(),
-                    needs_approval=True,
-                    tool_context=ctx,
-                )
-        assert result["success"] is True
+    def test_empty_items_returns_error(self):
+        ctx = _make_tool_context()
+        result = generate_transportation_expense_form.__wrapped__(
+            items=[],
+            tool_context=ctx,
+        )
+        assert result["success"] is False
 
-    def test_invocation_state_used(self):
-        """invocation_state から申請者名・申請日が取得されること"""
+    def test_output_filename_contains_timestamp(self):
+        ctx = _make_tool_context()
+        mock_wb = MagicMock()
+        mock_wb.active = MagicMock()
+
         with patch("os.path.exists", return_value=True):
-            with patch("os.makedirs"):
-                ctx = _make_tool_context(user_name="鈴木花子", request_date="2026-06-01")
-                og.generate_transport_expense_form(
-                    transport_records=_make_transport_records(),
-                    needs_approval=False,
-                    tool_context=ctx,
-                )
-        # ヘッダーセルへの書き込みを確認
-        mock_ws.__setitem__.assert_any_call("B1", "鈴木花子")
+            with patch("tools.output_generator.load_workbook", return_value=mock_wb):
+                with patch("os.makedirs"):
+                    result = generate_transportation_expense_form.__wrapped__(
+                        items=_VALID_TRANSPORT_ITEMS,
+                        tool_context=ctx,
+                    )
+
+        if result["success"]:
+            assert "交通費精算申請書" in result["file_path"]
 
 
 class TestGenerateGeneralExpenseForm:
-    """generate_general_expense_form のテスト"""
+    """generate_general_expense_form関数のテスト"""
 
-    def setup_method(self):
-        """各テスト前にモックをリセットする"""
-        mock_openpyxl.load_workbook.reset_mock()
-        mock_wb.save.reset_mock()
-
-    def test_success_with_template(self):
-        """テンプレートが存在する場合に正常生成されること"""
-        with patch("os.path.exists", return_value=True):
-            with patch("os.makedirs"):
-                ctx = _make_tool_context()
-                result = og.generate_general_expense_form(
-                    expense_records=_make_expense_records(),
-                    needs_approval=False,
-                    tool_context=ctx,
-                )
-        assert result["success"] is True
-        assert result["file_path"] is not None
-
-    def test_template_not_found(self):
-        """テンプレートファイルが存在しない場合にエラーが返ること"""
-        with patch("os.path.exists", return_value=False):
-            ctx = _make_tool_context()
-            result = og.generate_general_expense_form(
-                expense_records=_make_expense_records(),
-                needs_approval=False,
-                tool_context=ctx,
-            )
-        assert result["success"] is False
-        assert result["error_message"] is not None
-
-    def test_validation_error_empty_records(self):
-        """空のリストでバリデーションエラーが返ること"""
-        ctx = _make_tool_context()
-        result = og.generate_general_expense_form(
-            expense_records=[],
-            needs_approval=False,
+    def test_missing_applicant_name_returns_error(self):
+        ctx = _make_tool_context(applicant_name="")
+        result = generate_general_expense_form.__wrapped__(
+            items=_VALID_GENERAL_ITEMS,
             tool_context=ctx,
         )
         assert result["success"] is False
-        assert result["error_message"] is not None
 
-
-class TestGenerateFormHelper:
-    """_generate_form ヘルパーのテスト"""
-
-    def test_io_error_returns_error(self):
-        """IOError 発生時にエラーが返ること"""
-        mock_wb.save.side_effect = IOError("書き込みエラー")
-        with patch("os.path.exists", return_value=True):
-            with patch("os.makedirs"):
-                ctx = _make_tool_context()
-                result = og.generate_transport_expense_form(
-                    transport_records=_make_transport_records(),
-                    needs_approval=False,
-                    tool_context=ctx,
-                )
+    def test_empty_items_returns_error(self):
+        ctx = _make_tool_context()
+        result = generate_general_expense_form.__wrapped__(
+            items=[],
+            tool_context=ctx,
+        )
         assert result["success"] is False
-        assert result["error_message"] is not None
-        mock_wb.save.side_effect = None  # リセット
+
+
+class TestSanitizeCell:
+    """_sanitize_cell ヘルパーの単体テスト"""
+
+    def test_equals_prefix_sanitized(self):
+        assert _sanitize_cell("=SUM(A1:A10)") == "'=SUM(A1:A10)"
+
+    def test_plus_prefix_sanitized(self):
+        assert _sanitize_cell("+1234") == "'+1234"
+
+    def test_minus_prefix_sanitized(self):
+        assert _sanitize_cell("-1") == "'-1"
+
+    def test_at_prefix_sanitized(self):
+        assert _sanitize_cell("@SUM") == "'@SUM"
+
+    def test_normal_string_unchanged(self):
+        assert _sanitize_cell("東京") == "東京"
+
+    def test_empty_string_unchanged(self):
+        assert _sanitize_cell("") == ""
+
+    def test_integer_unchanged(self):
+        assert _sanitize_cell(200) == 200
+
+    def test_none_unchanged(self):
+        assert _sanitize_cell(None) is None

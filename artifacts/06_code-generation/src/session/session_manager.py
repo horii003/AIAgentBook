@@ -1,102 +1,70 @@
-"""セッション管理機能。
+"""セッション管理機能
 
-FileSessionManagerを使用してエージェントの会話履歴と状態を永続化する。
+FileSessionManagerを使用してエージェントの会話履歴と状態を永続化します。
 """
-import logging
 import os
 import uuid
 from datetime import datetime
 
 from strands.session.file_session_manager import FileSessionManager
 
-_logger = logging.getLogger(__name__)
-
-# セッションデータの保存先ディレクトリ（プロジェクトルートからの相対パス）
-_SESSION_STORAGE_DIR = "storage/sessions"
-
 
 class SessionManagerFactory:
-    """セッションマネージャーのファクトリークラス。
+    """セッション管理ファクトリ。
 
-    セッションID生成とFileSessionManagerインスタンス生成を担当する。
+    セッションIDの生成、FileSessionManagerインスタンスの生成、
+    リセットコマンドの判定を提供するユーティリティクラス。
+    全メソッドが@staticmethodであり、インスタンス化不要。
     """
 
-    # セッションの保存先ディレクトリ（キャッシュ）
-    _storage_dir: str = None
+    # セッションデータの保存先ベースディレクトリ
+    _STORAGE_DIR = "storage/sessions"
 
-    @classmethod
-    def generate_session_id(cls, prefix: str = "") -> str:
-        """一意のセッションIDを生成する。
+    # リセットコマンドの一覧
+    _RESET_COMMANDS = {"reset", "リセット", "最初から"}
 
-        セッションIDはタイムスタンプ（秒単位）とUUID（8文字）の組み合わせで生成される。
-        これにより、同じ秒に複数のセッションが開始されても衝突を防ぐ。
-
-        Args:
-            prefix: セッションIDのプレフィックス（オプション）
-                   例: "test", "user_a" など
+    @staticmethod
+    def generate_session_id() -> str:
+        """セッションIDを生成する。
 
         Returns:
-            str: 生成されたセッションID
-                - prefixなし: "YYYYMMDD_HHMMSS_uuid8"
-                - prefixあり: "prefix_YYYYMMDD_HHMMSS_uuid8"
-
-        Examples:
-            >>> SessionManagerFactory.generate_session_id()
-            "20260209_143022_a1b2c3d4"
-
-            >>> SessionManagerFactory.generate_session_id("test")
-            "test_20260209_143022_a1b2c3d4"
+            session_{YYYYMMDD_HHMMSS}_{ランダム8文字}形式のセッションID
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        unique_id = uuid.uuid4().hex[:8]
-        session_id = f"{timestamp}_{unique_id}"
-        if prefix:
-            session_id = f"{prefix}_{session_id}"
-        return session_id
+        random_suffix = uuid.uuid4().hex[:8]
+        return f"session_{timestamp}_{random_suffix}"
 
-    @classmethod
-    def get_storage_dir(cls) -> str:
-        """セッションの保存先ディレクトリを取得する。
-
-        初回呼び出し時にディレクトリを作成し、以降はキャッシュを返す。
-
-        Returns:
-            str: セッションデータの保存先ディレクトリパス
-        """
-        if cls._storage_dir is None:
-            # プロジェクトルートからの相対パスでディレクトリを構築
-            storage_dir = _SESSION_STORAGE_DIR
-            os.makedirs(storage_dir, exist_ok=True)
-            cls._storage_dir = storage_dir
-        return cls._storage_dir
-
-    @classmethod
-    def create_session_manager(cls, session_id: str) -> FileSessionManager:
-        """FileSessionManagerのインスタンスを作成する。
+    @staticmethod
+    def create(session_id: str) -> FileSessionManager:
+        """FileSessionManagerインスタンスを生成する。
 
         Args:
-            session_id: セッションID（ユーザーごとに一意）
+            session_id: セッションID（generate_session_idで生成した値）
 
         Returns:
-            FileSessionManager: セッションマネージャーのインスタンス
-        """
-        storage_dir = cls.get_storage_dir()
-        session_manager = FileSessionManager(
-            session_id=session_id,
-            storage_dir=storage_dir,
-        )
-        _logger.info("セッション作成: session_id=%s", session_id)
-        return session_manager
+            指定セッションIDに対応するFileSessionManagerインスタンス
 
-    @classmethod
-    def get_session_path(cls, session_id: str) -> str:
-        """指定されたセッションIDのセッションディレクトリパスを取得する。
+        Raises:
+            ValueError: session_idが空文字の場合
+        """
+        if not session_id:
+            raise ValueError("session_id は空文字にできません")
+
+        storage_dir = SessionManagerFactory._STORAGE_DIR
+        os.makedirs(storage_dir, exist_ok=True)
+
+        return FileSessionManager(session_id=session_id, storage_dir=storage_dir)
+
+    @staticmethod
+    def is_reset_command(user_input: str) -> bool:
+        """ユーザー入力がリセットコマンドかどうかを判定する。
 
         Args:
-            session_id: セッションID
+            user_input: ユーザーからの入力テキスト
 
         Returns:
-            str: セッションディレクトリのパス
+            リセットコマンドの場合True、それ以外はFalse
         """
-        storage_dir = cls.get_storage_dir()
-        return os.path.join(storage_dir, session_id)
+        normalized = user_input.strip().lower()
+        # 日本語コマンドは小文字変換しても変わらないため、元の値も確認
+        return normalized in SessionManagerFactory._RESET_COMMANDS or user_input.strip() in SessionManagerFactory._RESET_COMMANDS

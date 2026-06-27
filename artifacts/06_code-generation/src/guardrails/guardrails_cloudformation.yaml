@@ -1,55 +1,61 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Amazon Bedrock Guardrails for AI Agent Application"
+Description: "経費精算申請システム用ガードレール"
 
 Resources:
   BedrockGuardrail:
     Type: AWS::Bedrock::Guardrail
     Properties:
-      Name: "ai-agent-guardrail"
-      Description: "AIエージェント申請システム用ガードレール"
+      Name: "expense-reimbursement-guardrail10"
+      Description: "経費精算申請システム用ガードレール"
 
       # --- 入力ブロック時のフォールバック応答 ---
-      BlockedInputMessaging: "入力内容が安全ポリシーに違反しています。別の内容で再度お試しください。"
+      BlockedInputMessaging: |
+        申し訳ございませんが、その入力は処理できません。
+        経費精算に関する適切な内容を入力してください。
 
       # --- 出力ブロック時のフォールバック応答 ---
-      BlockedOutputsMessaging: "出力内容が安全ポリシーに違反しています。申請管理部門にお問い合わせください。"
+      BlockedOutputsMessaging: |
+        申し訳ございませんが、適切な応答を生成できませんでした。
+        別の表現でお試しください。
 
       # ============================================================
       # コンテンツポリシーフィルタ
       # ============================================================
       ContentPolicyConfig:
+        ContentFiltersTierConfig:
+          TierName: "STANDARD"
         FiltersConfig:
           - Type: "HATE"
-            InputStrength: "MEDIUM"
-            OutputStrength: "MEDIUM"
+            InputStrength: "HIGH"
+            OutputStrength: "HIGH"
             InputAction: "BLOCK"
             OutputAction: "BLOCK"
 
           - Type: "INSULTS"
-            InputStrength: "MEDIUM"
-            OutputStrength: "MEDIUM"
+            InputStrength: "HIGH"
+            OutputStrength: "HIGH"
             InputAction: "BLOCK"
             OutputAction: "BLOCK"
 
           - Type: "SEXUAL"
-            InputStrength: "MEDIUM"
-            OutputStrength: "MEDIUM"
+            InputStrength: "HIGH"
+            OutputStrength: "HIGH"
             InputAction: "BLOCK"
             OutputAction: "BLOCK"
 
           - Type: "VIOLENCE"
-            InputStrength: "MEDIUM"
-            OutputStrength: "MEDIUM"
+            InputStrength: "HIGH"
+            OutputStrength: "HIGH"
             InputAction: "BLOCK"
             OutputAction: "BLOCK"
 
           - Type: "MISCONDUCT"
-            InputStrength: "MEDIUM"
-            OutputStrength: "MEDIUM"
+            InputStrength: "HIGH"
+            OutputStrength: "HIGH"
             InputAction: "BLOCK"
             OutputAction: "BLOCK"
 
-          # 注意: PROMPT_ATTACK は入力側のみ。OutputStrength は "NONE" 固定
+          # PROMPT_ATTACK は入力側のみ。OutputStrength は "NONE" 固定
           - Type: "PROMPT_ATTACK"
             InputStrength: "HIGH"
             OutputStrength: "NONE"
@@ -65,33 +71,43 @@ Resources:
             OutputEnabled: true
             InputAction: "BLOCK"
             OutputAction: "BLOCK"
+        WordsConfig:
+          - Text: "架空請求"
+            InputEnabled: true
+            OutputEnabled: true
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+          - Text: "水増し"
+            InputEnabled: true
+            OutputEnabled: true
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+          - Text: "偽造"
+            InputEnabled: true
+            OutputEnabled: true
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+          - Text: "プロンプトを無視"
+            InputEnabled: true
+            OutputEnabled: true
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+          - Text: "指示を上書き"
+            InputEnabled: true
+            OutputEnabled: true
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
+          - Text: "ロールを変更"
+            InputEnabled: true
+            OutputEnabled: true
+            InputAction: "BLOCK"
+            OutputAction: "BLOCK"
 
       # ============================================================
-      # センシティブ情報ポリシー（PII マスキング・ブロック）
+      # センシティブ情報ポリシー
       # ============================================================
       SensitiveInformationPolicyConfig:
         PiiEntitiesConfig:
-          - Type: "NAME"
-            Action: "ANONYMIZE"
-            InputEnabled: true
-            OutputEnabled: true
-            InputAction: "ANONYMIZE"
-            OutputAction: "ANONYMIZE"
-
-          - Type: "EMAIL"
-            Action: "ANONYMIZE"
-            InputEnabled: true
-            OutputEnabled: true
-            InputAction: "ANONYMIZE"
-            OutputAction: "ANONYMIZE"
-
-          - Type: "PHONE"
-            Action: "ANONYMIZE"
-            InputEnabled: true
-            OutputEnabled: true
-            InputAction: "ANONYMIZE"
-            OutputAction: "ANONYMIZE"
-
           - Type: "CREDIT_DEBIT_CARD_CVV"
             Action: "BLOCK"
             InputEnabled: true
@@ -100,18 +116,19 @@ Resources:
             OutputAction: "BLOCK"
 
       # ============================================================
-      # トピックポリシー（申請種別制限: GRD-004）
+      # トピックポリシー
       # ============================================================
       TopicPolicyConfig:
         TopicsConfig:
-          - Name: "out-of-scope-requests"
-            Definition: "交通費精算申請・経費精算申請以外の申請種別（例: 有給申請、採用申請、設備申請等）"
+          - Name: "off-topic-general"
+            Definition: "経費精算・交通費精算に関係のない一般的な質問、雑談、プログラミング支援、他社サービスの問い合わせ"
             Type: "DENY"
             InputAction: "BLOCK"
             OutputAction: "BLOCK"
             Examples:
-              - "有給休暇を申請したい"
-              - "採用の申請をしたい"
+              - "今日の天気を教えてください"
+              - "Pythonのコードを書いてください"
+              - "おすすめのレストランはありますか"
 
       # ============================================================
       # クロスリージョン設定
@@ -121,9 +138,9 @@ Resources:
 
       Tags:
         - Key: "Name"
-          Value: "ai-agent-guardrail"
+          Value: "expense-reimbursement-guardrail"
         - Key: "Region"
-          Value: !Ref AWS::Region
+          Value: "ap-northeast-1"
 
 Outputs:
   GuardrailId:

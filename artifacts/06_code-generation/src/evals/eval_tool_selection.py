@@ -1,7 +1,7 @@
-"""ツール利用の適切性評価（MET-001: 申請種別判断正確率）
+"""ツール選択精度評価
 
-AG-001 が申請種別に応じて transportation_expense_agent / general_expense_agent を
-正しく選択することを ToolSelectionAccuracyEvaluator で評価する。
+オーケストレーターエージェントが申請内容に応じて適切な専門エージェントツールを
+選択するかを評価する（シングルターン）。
 
 評価レベル: TOOL_LEVEL
 実行方法: python evals/eval_tool_selection.py
@@ -12,6 +12,7 @@ import os
 import json
 import logging
 import warnings
+
 from dotenv import load_dotenv
 
 # ---- 初期設定 ----
@@ -24,12 +25,13 @@ load_dotenv()
 
 from helpers import (
     patch_human_approval_hook,
-    create_orchestrator_agent,
+    create_eval_agent,
     memory_exporter,
     get_model,
     create_invocation_state,
 )
 
+# エージェントモジュールのインポート前にパッチを適用
 patch_human_approval_hook()
 
 from strands_evals import Case, Experiment
@@ -39,6 +41,7 @@ from strands_evals.mappers import StrandsInMemorySessionMapper
 _LOGS_DIR = os.path.join("evals", "logs")
 _REPORTS_DIR = os.path.join(_LOGS_DIR, "reports")
 os.makedirs(_REPORTS_DIR, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
@@ -62,27 +65,48 @@ logging.getLogger("strands.event_loop.event_loop").setLevel(logging.CRITICAL)
 
 EVAL_CASES = [
     Case(
-        name="transport_train_tokyo_shinjuku",
-        input="申請者は田中太郎です。2026-05-18に東京から新宿まで電車で移動しました。業務目的は顧客訪問です。交通費を申請したいです。",
+        name="TS-01_交通費申請_電車",
+        input="先週、東京から新宿まで電車で移動しました。交通費を精算したいです。",
         metadata={
-            "task_description": "電車移動の交通費精算申請として transportation_expense_agent が選択されること",
+            "task_description": "交通費精算申請への適切なルーティングを検証する",
+            "goal": "transportation_expense_agent が呼び出されること",
             "expected_tool": "transportation_expense_agent",
         },
     ),
     Case(
-        name="transport_taxi_business_trip",
-        input="申請者は鈴木花子です。出張でタクシーを使いました。2026-05-15に品川から渋谷まで移動しました。業務目的は取引先訪問です。交通費の精算をお願いします。",
+        name="TS-02_交通費申請_タクシー",
+        input="昨日、客先訪問のためタクシーを利用しました。交通費の申請をお願いします。",
         metadata={
-            "task_description": "タクシー移動の交通費精算申請として transportation_expense_agent が選択されること",
+            "task_description": "タクシー利用の交通費精算申請への適切なルーティングを検証する",
+            "goal": "transportation_expense_agent が呼び出されること",
             "expected_tool": "transportation_expense_agent",
         },
     ),
     Case(
-        name="expense_office_supplies",
-        input="申請者は山田次郎です。2026-05-10に東京文具店でボールペンとノートを3,000円で購入しました。業務目的は業務用消耗品の補充です。経費申請をしたいです。",
+        name="TS-03_経費申請_備品購入",
+        input="業務用のノートとボールペンを購入しました。2026年5月20日に文具堂で1,500円でした。経費精算をお願いします。",
         metadata={
-            "task_description": "事務用品購入の経費精算申請として general_expense_agent が選択されること",
+            "task_description": "経費精算申請への適切なルーティングを検証する",
+            "goal": "general_expense_agent が呼び出されること",
             "expected_tool": "general_expense_agent",
+        },
+    ),
+        Case(
+        name="TS-04_交通費申請_電車",
+        input="先週、豊洲から新宿まで電車で移動しました。交通費を精算したいです。",
+        metadata={
+            "task_description": "交通費精算申請への適切なルーティングを検証する",
+            "goal": "transportation_expense_agent が呼び出されること",
+            "expected_tool": "transportation_expense_agent",
+        },
+    ),
+            Case(
+        name="TS-05_交通費申請_電車",
+        input="先週、豊洲から練馬まで電車で移動しました。交通費を精算したいです。",
+        metadata={
+            "task_description": "交通費精算申請への適切なルーティングを検証する",
+            "goal": "transportation_expense_agent が呼び出されること",
+            "expected_tool": "transportation_expense_agent",
         },
     ),
 ]
@@ -99,26 +123,29 @@ def run_eval_task(case: Case) -> dict:
         case: 評価ケース
 
     Returns:
-        dict: {"output": str, "trajectory": Session}
+        dict: {"output": エージェント応答, "trajectory": Sessionオブジェクト}
     """
-    # 前ケースのスパン混入防止（必須）
+    # 1. 前ケースのスパン混入防止
     memory_exporter.clear()
 
-    # エージェント生成
-    agent = create_orchestrator_agent(session_id=case.session_id)
+    # 2. エージェント生成（trace_attributesでセッション分離）
+    session_id = case.session_id or f"eval_ts_{case.name}"
+    invocation_state = create_invocation_state(session_id=session_id)
+    agent = create_eval_agent(session_id=session_id)
 
-    # 状態生成
-    invocation_state_dict = create_invocation_state(session_id=case.session_id)
+    # 3. エージェント実行（シングルターン）
+    response = agent(case.input, invocation_state=invocation_state)
 
-    # 1ターン送信
-    response = agent(case.input, invocation_state=invocation_state_dict)
-    response_str = str(response)
-
-    # スパン収集 → Session 構築
+    # 4. スパン収集
     spans = list(memory_exporter.get_finished_spans())
-    session = StrandsInMemorySessionMapper().map_to_session(spans, session_id=case.session_id)
 
-    return {"output": response_str, "trajectory": session}
+    # 5. Session構築
+    session = StrandsInMemorySessionMapper().map_to_session(
+        spans, session_id=session_id
+    )
+
+    # 6. 結果返却
+    return {"output": str(response), "trajectory": session}
 
 
 # ================================================================
@@ -127,25 +154,27 @@ def run_eval_task(case: Case) -> dict:
 
 def main():
     """評価実験を実行し、レポートを保存する。"""
-    logger.info("ツール利用の適切性評価（MET-001）を開始します")
+    logger.info("ツール選択精度評価を開始します")
 
-    # 評価器生成
     evaluator = ToolSelectionAccuracyEvaluator(model=get_model())
-
-    # 実験構成
     experiment = Experiment(cases=EVAL_CASES, evaluators=[evaluator])
 
-    # 評価実行
     reports = experiment.run_evaluations(run_eval_task)
 
-    # レポート保存
+    # レポートをJSON保存
     report_path = os.path.join(_REPORTS_DIR, "eval_tool_selection_report.json")
+    report_data = []
+    for report in reports:
+        report_data.append(report.to_dict())
+
     with open(report_path, "w", encoding="utf-8") as f:
-        json.dump(reports[0].to_dict(), f, ensure_ascii=False, indent=2)
+        json.dump(report_data, f, ensure_ascii=False, indent=2)
+
     logger.info("レポートを保存しました: %s", report_path)
 
     # コンソール表示
-    reports[0].run_display()
+    for report in reports:
+        report.run_display()
 
 
 if __name__ == "__main__":

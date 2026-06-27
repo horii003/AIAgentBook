@@ -8,14 +8,19 @@
 """
 
 import logging
+import sys
+import os
 from datetime import datetime
 
-from strands import Agent, ModelRetryStrategy
+from strands import Agent
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_evals import ActorSimulator
 from strands_evals.telemetry import StrandsEvalsTelemetry
 
 logger = logging.getLogger(__name__)
+
+# src/ をパスに追加
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 
 # ============================================================
@@ -44,15 +49,16 @@ def patch_human_approval_hook():
 
     _original_init = HumanApprovalHook.__init__
 
-    def _patched_init(self, approval_callback=None, approval_required_tools=None):
-        # 自動承認コールバック（常に承認）
+    def _patched_init(self, target_tools=None, approval_callback=None):
+        # 自動承認コールバックを注入
         _original_init(
             self,
+            target_tools=target_tools or [],
             approval_callback=lambda tool_name, tool_params: (True, ""),
-            approval_required_tools=approval_required_tools,
         )
 
     HumanApprovalHook.__init__ = _patched_init
+    logger.info("HumanApprovalHook を自動承認モードにパッチしました")
 
 
 # ============================================================
@@ -63,36 +69,33 @@ def get_model():
     """評価器用のモデルを取得する。
 
     Returns:
-        BedrockModel: 評価対象と同一のモデルインスタンス
+        BedrockModel: エージェント本体と同一構成のモデルインスタンス
     """
     from config.model_config import ModelConfig
     return ModelConfig.get_model()
 
 
 def create_invocation_state(session_id: str) -> dict:
-    """評価用の InvocationState を作成する。
+    """評価用の invocation_state 辞書を作成する。
 
     Args:
         session_id: テストケース固有のセッションID
 
     Returns:
-        dict: InvocationState を model_dump() した辞書
+        dict: invocation_state として渡す辞書
     """
-    from models.data_models import InvocationState
-
-    state = InvocationState(
-        user_name="評価テストユーザー",
-        request_date=datetime.now().strftime("%Y-%m-%d"),
-        session_id=session_id,
-    )
-    return state.model_dump()
+    return {
+        "applicant_name": "評価テストユーザー",
+        "application_date": datetime.now().strftime("%Y-%m-%d"),
+        "session_id": session_id,
+    }
 
 
 # ============================================================
 # エージェントファクトリ
 # ============================================================
 
-def create_orchestrator_agent(session_id: str) -> Agent:
+def create_eval_agent(session_id: str) -> Agent:
     """評価用のオーケストレーターエージェントを作成する。
 
     既存の OrchestratorAgent クラスは input() ループを持つため直接使えない。
@@ -102,37 +105,37 @@ def create_orchestrator_agent(session_id: str) -> Agent:
         session_id: セッションID（テレメトリの trace_attributes に設定）
 
     Returns:
-        Agent: 評価用オーケストレーターエージェント
+        Agent: 評価用のAgentインスタンス
     """
-    from agents.general_expense_agent import general_expense_agent
     from agents.transportation_expense_agent import transportation_expense_agent
+    from agents.general_expense_agent import general_expense_agent
+    from config.model_config import ModelConfig
     from config.settings import settings
     from handlers.loop_control_hook import LoopControlHook
     from prompt.prompt_orchestrator import ORCHESTRATOR_SYSTEM_PROMPT
     from session.session_manager import SessionManagerFactory
 
     cfg = settings.orchestrator
-    session_manager = SessionManagerFactory.create_session_manager(session_id)
+    session_manager = SessionManagerFactory.create(session_id)
+    loop_hook = LoopControlHook(
+        max_iterations=cfg.max_iterations,
+        agent_name="申請受付窓口エージェント（評価）",
+    )
 
     return Agent(
-        model=get_model(),
+        model=ModelConfig.get_model(),
         system_prompt=ORCHESTRATOR_SYSTEM_PROMPT,
         tools=[transportation_expense_agent, general_expense_agent],
-        agent_id="orchestrator_agent",
-        name="申請受付窓口エージェント",
-        description="社内申請の受付・種別判断・専門エージェントへの委譲を担当するオーケストレーター",
-        callback_handler=None,
+        agent_id="orchestrator_agent_eval",
+        name="申請受付窓口エージェント（評価）",
+        description="評価用オーケストレーターエージェント",
         conversation_manager=SlidingWindowConversationManager(
             window_size=cfg.window_size,
             should_truncate_results=True,
             per_turn=False,
         ),
-        retry_strategy=ModelRetryStrategy(
-            max_attempts=cfg.max_attempts,
-            initial_delay=cfg.initial_delay,
-            max_delay=cfg.max_delay,
-        ),
-        hooks=[LoopControlHook(max_iterations=cfg.max_iterations, agent_name="申請受付窓口エージェント")],
+        callback_handler=None,
+        hooks=[loop_hook],
         session_manager=session_manager,
         trace_attributes={
             "session.id": session_id,
@@ -150,7 +153,7 @@ def run_actor_conversation(
     case,
     invocation_state_dict: dict,
     max_turns: int = 10,
-) -> list:
+) -> str:
     """ActorSimulator を使ってエージェントと動的マルチターン会話を実行する。
 
     ActorSimulator が LLM ベースのユーザーシミュレータとして動的に応答を生成し、
@@ -159,26 +162,31 @@ def run_actor_conversation(
     Args:
         agent: strands Agent インスタンス
         case: strands_evals Case オブジェクト
-        invocation_state_dict: InvocationState を model_dump() した dict
+        invocation_state_dict: invocation_state として渡す辞書
         max_turns: 最大ターン数
 
     Returns:
-        list[dict]: 各ターンの {"user_prompt", "agent_response"} リスト
+        str: エージェントの最終応答テキスト
+
+    Note:
+        会話ループ内で memory_exporter.clear() を呼んではならない。
+        全ターンのスパンを蓄積し、ループ完了後にまとめて Session を構築する。
     """
     user_sim = ActorSimulator.from_case_for_user_simulator(
         case=case,
         model=get_model(),
         max_turns=max_turns,
     )
-    turns = []
+
     user_message = case.input
+    agent_response = ""
 
     while user_sim.has_next():
         # memory_exporter.clear() は呼ばない — 全ターンのスパンを蓄積する
-        agent_response = agent(user_message, invocation_state=invocation_state_dict)
-        response_str = str(agent_response)
-        turns.append({"user_prompt": user_message, "agent_response": response_str})
-        user_result = user_sim.act(response_str)
+        result = agent(user_message, invocation_state=invocation_state_dict)
+        agent_response = str(result)
+
+        user_result = user_sim.act(agent_response)
         user_message = str(user_result.structured_output.message)
 
-    return turns
+    return agent_response

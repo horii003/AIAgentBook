@@ -1,18 +1,19 @@
-"""経費精算申請エージェント。
+"""経費精算申請エージェント
 
-経費精算申請の経費情報を収集し、経費精算申請書（Excel）を生成する。
-AG-001 から Agent as Tool として呼び出される専門エージェント。
+一般経費精算申請の情報収集・領収書解析・カテゴリ判定・期限チェック・申請書生成を担当する
+専門エージェント（Agent as Tool）。
 """
-from strands import Agent, ToolContext, tool
+import logging
+
+from strands import Agent, tool, ToolContext
 
 from agents.base_agent import create_specialist_agent, invoke_specialist_agent
 from config.settings import settings
-from knowledge.receipt_policies import get_receipt_policies
 from prompt.prompt_general_expense import get_general_expense_system_prompt
 from tools.output_generator import generate_general_expense_form
 
+_logger = logging.getLogger(__name__)
 
-# ============ エージェントの初期化 ============
 
 def _build_general_expense_agent(
     session_id: str,
@@ -20,7 +21,7 @@ def _build_general_expense_agent(
     application_date: str,
     deadline: str,
 ) -> Agent:
-    """経費精算申請エージェントのインスタンスを作成するビルド関数。
+    """経費精算申請エージェントのインスタンスを生成する。
 
     Args:
         session_id: セッションID
@@ -29,27 +30,19 @@ def _build_general_expense_agent(
         deadline: 申請期限（YYYY-MM-DD形式）
 
     Returns:
-        Agent: 経費精算申請エージェントのインスタンス
+        構成済みのAgentインスタンス
     """
     cfg = settings.general_expense
-
-    # システムプロンプトを生成
-    receipt_policies = get_receipt_policies(
-        deadline_months=cfg.deadline_months,
-        approval_threshold=cfg.approval_threshold,
-    )
     system_prompt = get_general_expense_system_prompt(
         applicant_name=applicant_name,
         application_date=application_date,
         deadline=deadline,
-        receipt_policies=receipt_policies,
     )
-
-    # エージェントを生成して返却
     return create_specialist_agent(
         session_id=session_id,
         system_prompt=system_prompt,
         tools=[generate_general_expense_form],
+        agent_id="general_expense_agent",
         agent_name="経費精算申請エージェント",
         window_size=cfg.window_size,
         max_iterations=cfg.max_iterations,
@@ -59,18 +52,15 @@ def _build_general_expense_agent(
     )
 
 
-# ============ Agent as Tools ============
-
 @tool(context=True)
 def general_expense_agent(query: str, tool_context: ToolContext) -> str:
-    """経費精算申請を処理する専門エージェント。
-    領収書情報収集・経費区分判断・申請書生成を担当する。
+    """一般経費精算申請の情報収集・領収書解析・カテゴリ判定・期限チェック・申請書生成を行う。
 
     Args:
-        query: AG-001 からの指示・ユーザーの申請内容
+        query: オーケストレーターからの質問・指示
 
     Returns:
-        str: 処理結果メッセージ（申請書生成完了・エラーメッセージ等）
+        str: エージェントからの応答
     """
     return invoke_specialist_agent(
         query=query,

@@ -1,39 +1,37 @@
-# 環境変数ファイル（秘密情報を含む）
+# 環境変数ファイル（秘密情報を含むため除外）
 .env
 
-# Pythonキャッシュ
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
 .Python
+*.egg-info/
+dist/
+build/
+.eggs/
 
 # 仮想環境
 .venv/
 venv/
 env/
 
-# 実行時生成ディレクトリ
-storage/
-logs/
-output/
-
 # テストカバレッジ
 .coverage
 htmlcov/
 .pytest_cache/
 
-# IDEファイル
+# ログファイル
+logs/
+
+# 出力ファイル
+output/
+
+# セッションデータ
+storage/
+
+# IDE
 .idea/
 .vscode/
 *.swp
-*.swo
-
-# OS固有ファイル
-.DS_Store
-Thumbs.db
-
-# ビルド成果物
-dist/
-build/
-*.egg-info/

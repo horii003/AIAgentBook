@@ -1,108 +1,56 @@
-"""SessionManagerFactory の単体テスト"""
+"""SessionManagerFactoryの単体テスト"""
 import re
-import sys
-from unittest.mock import MagicMock, patch
-
 import pytest
-
-# strands.session.file_session_manager をモックとして登録
-mock_file_session_manager = MagicMock()
-mock_file_session_manager_class = MagicMock()
-mock_file_session_manager.FileSessionManager = mock_file_session_manager_class
-
-sys.modules.setdefault("strands", MagicMock())
-sys.modules.setdefault("strands.session", MagicMock())
-sys.modules.setdefault("strands.session.file_session_manager", mock_file_session_manager)
-
-# モジュールをリロード
-if "session.session_manager" in sys.modules:
-    del sys.modules["session.session_manager"]
+from unittest.mock import patch, MagicMock
 
 from session.session_manager import SessionManagerFactory
 
 
-class TestGenerateSessionId:
-    """generate_session_id のテスト"""
+class TestSessionManagerFactory:
+    """SessionManagerFactoryのテスト"""
 
-    def test_format_without_prefix(self):
-        """プレフィックスなしの場合に YYYYMMDD_HHMMSS_uuid8 形式であること"""
+    def test_generate_session_id_format(self):
         session_id = SessionManagerFactory.generate_session_id()
-        # YYYYMMDD_HHMMSS_uuid8 形式を確認
-        pattern = r"^\d{8}_\d{6}_[0-9a-f]{8}$"
-        assert re.match(pattern, session_id), f"形式が不正: {session_id}"
+        assert re.match(r"^session_\d{8}_\d{6}_[0-9a-f]{8}$", session_id)
 
-    def test_format_with_prefix(self):
-        """プレフィックスありの場合に prefix_YYYYMMDD_HHMMSS_uuid8 形式であること"""
-        session_id = SessionManagerFactory.generate_session_id("test")
-        pattern = r"^test_\d{8}_\d{6}_[0-9a-f]{8}$"
-        assert re.match(pattern, session_id), f"形式が不正: {session_id}"
-
-    def test_uniqueness(self):
-        """異なる呼び出しで異なるIDが生成されること"""
+    def test_generate_session_id_unique(self):
         id1 = SessionManagerFactory.generate_session_id()
         id2 = SessionManagerFactory.generate_session_id()
         assert id1 != id2
 
+    def test_create_empty_session_id_raises(self):
+        with pytest.raises(ValueError):
+            SessionManagerFactory.create("")
 
-class TestGetStorageDir:
-    """get_storage_dir のテスト"""
+    def test_create_returns_file_session_manager(self):
+        with patch("session.session_manager.FileSessionManager") as mock_fsm:
+            with patch("os.makedirs"):
+                SessionManagerFactory.create("test_session_id")
+                mock_fsm.assert_called_once()
 
-    def setup_method(self):
-        """各テスト前にキャッシュをリセットする"""
-        SessionManagerFactory._storage_dir = None
+    def test_is_reset_command_reset(self):
+        assert SessionManagerFactory.is_reset_command("reset") is True
 
-    def test_returns_string(self):
-        """文字列を返すこと"""
-        with patch("os.makedirs"):
-            result = SessionManagerFactory.get_storage_dir()
-        assert isinstance(result, str)
+    def test_is_reset_command_reset_uppercase(self):
+        assert SessionManagerFactory.is_reset_command("Reset") is True
 
-    def test_returns_same_instance_on_second_call(self):
-        """2回目以降の呼び出しでキャッシュを返すこと"""
-        with patch("os.makedirs"):
-            result1 = SessionManagerFactory.get_storage_dir()
-            result2 = SessionManagerFactory.get_storage_dir()
-        assert result1 == result2
+    def test_is_reset_command_reset_all_caps(self):
+        assert SessionManagerFactory.is_reset_command("RESET") is True
 
+    def test_is_reset_command_japanese_reset(self):
+        assert SessionManagerFactory.is_reset_command("リセット") is True
 
-class TestCreateSessionManager:
-    """create_session_manager のテスト"""
+    def test_is_reset_command_japanese_start_over(self):
+        assert SessionManagerFactory.is_reset_command("最初から") is True
 
-    def setup_method(self):
-        """各テスト前にキャッシュをリセットする"""
-        SessionManagerFactory._storage_dir = None
-        mock_file_session_manager_class.reset_mock()
+    def test_is_reset_command_with_spaces(self):
+        assert SessionManagerFactory.is_reset_command(" reset ") is True
 
-    def test_returns_file_session_manager(self):
-        """FileSessionManager インスタンスを返すこと"""
-        with patch("os.makedirs"):
-            result = SessionManagerFactory.create_session_manager("test_session_id")
-        assert result is not None
+    def test_is_reset_command_hello_false(self):
+        assert SessionManagerFactory.is_reset_command("hello") is False
 
-    def test_calls_file_session_manager_with_session_id(self):
-        """FileSessionManager が正しい session_id で呼び出されること"""
-        mock_file_session_manager_class.reset_mock()
-        with patch("os.makedirs"):
-            SessionManagerFactory.create_session_manager("my_session_123")
+    def test_is_reset_command_partial_false(self):
+        assert SessionManagerFactory.is_reset_command("リセットする") is False
 
-        # FileSessionManagerが呼ばれた場合のみ確認
-        if mock_file_session_manager_class.call_args is not None:
-            call_kwargs = mock_file_session_manager_class.call_args[1]
-            assert call_kwargs.get("session_id") == "my_session_123"
-        else:
-            # モジュールキャッシュの問題でモックが機能しない場合はスキップ
-            pass
-
-
-class TestGetSessionPath:
-    """get_session_path のテスト"""
-
-    def setup_method(self):
-        """各テスト前にキャッシュをリセットする"""
-        SessionManagerFactory._storage_dir = None
-
-    def test_returns_path_containing_session_id(self):
-        """セッションIDを含むパスを返すこと"""
-        with patch("os.makedirs"):
-            path = SessionManagerFactory.get_session_path("my_session_123")
-        assert "my_session_123" in path
+    def test_is_reset_command_empty_false(self):
+        assert SessionManagerFactory.is_reset_command("") is False

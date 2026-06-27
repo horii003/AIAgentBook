@@ -1,7 +1,4 @@
-"""マルチエージェントアプリケーション - メインエントリーポイント。
-
-環境変数の読み込み、ログ設定、オーケストレーターエージェントの起動を行う。
-"""
+"""マルチエージェントアプリケーション - メインエントリーポイント"""
 import logging
 import os
 import sys
@@ -9,14 +6,11 @@ from logging.handlers import RotatingFileHandler
 
 from dotenv import load_dotenv
 
-from agents.orchestrator_agent import OrchestratorAgent
-from handlers.error_handler import ErrorHandler
-
 # .envファイルを読み込み
 load_dotenv()
 
-# ログレベルの取得（デフォルト: INFO）
-_log_level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
+# ログレベルの取得
+log_level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
 
 # ログディレクトリの作成
 os.makedirs("logs", exist_ok=True)
@@ -44,28 +38,39 @@ _console_handler = logging.StreamHandler()
 _console_handler.setLevel(logging.INFO)
 _console_handler.setFormatter(_formatter)
 
-# logging.basicConfig の設定（3ハンドラー構成）
+# logging.basicConfigの設定（3ハンドラー構成）
 logging.basicConfig(
-    level=_log_level,
+    level=log_level,
     handlers=[_console_handler, _app_handler, _error_handler_file],
 )
 
-# Strands SDK のログレベル制御（WARNING: 過剰なデバッグ出力を抑制）
+# Strandsライブラリのログレベル制御（WARNING: 過剰なデバッグ出力を抑制）
 logging.getLogger("strands").setLevel(logging.WARNING)
 
 
 def main() -> None:
-    """メイン関数。"""
+    """メイン関数"""
+    from agents.orchestrator_agent import OrchestratorAgent
+    from handlers.error_handler import ErrorHandler
+
     _logger = logging.getLogger(__name__)
+    _logger.info("システム起動")
 
     try:
-        _logger.info("システム起動")
-        agent = OrchestratorAgent()
+        # 申請者名の入力
+        print("申請者名を入力してください: ", end="")
+        applicant_name = input().strip()
+        if not applicant_name:
+            applicant_name = "未入力"
+
+        agent = OrchestratorAgent(applicant_name=applicant_name)
         agent.run()
         _logger.info("システム正常終了")
+
     except KeyboardInterrupt:
-        print(ErrorHandler.handle_keyboard_interrupt())
+        print(ErrorHandler.handle_keyboard_interrupt(KeyboardInterrupt()))
         _logger.info("システム終了（KeyboardInterrupt）")
+
     except Exception as e:
         _logger.error("システムエラー error=%s", str(e), exc_info=True)
         print(ErrorHandler.handle_unexpected_error(e))
