@@ -23,7 +23,7 @@ try {
     # AIAgentBook のルート（1つ上の階層）
     $srcRoot = (Resolve-Path (Join-Path $scriptDir '..')).Path
 
-    $zipName = 'AiAgentBook.zip'
+    $zipName = 'AIAgentBook.zip'
     $zipPath = Join-Path $scriptDir $zipName
 
     # ステージング用の一時ディレクトリ
